@@ -90,81 +90,20 @@
 		<Compile Include="Compat\JavaScriptSerializer.vb" />
 		<Compile Include="Compat\BuiltInParameterGroupCompat.vb" />
 
-		<!-- 공통 App / Commands (2019-2023에서 링크) -->
+		<!-- 공통 코드(2019-2023에서 링크) -->
 		<Compile Include="..\KKY_Tool_Revit_2019-2023\APP.vb">
 			<Link>APP.vb</Link>
 		</Compile>
-		<Compile Include="..\KKY_Tool_Revit_2019-2023\Commands\CmdOpenHub.vb">
-			<Link>Commands\CmdOpenHub.vb</Link>
-		</Compile>
-
-		<!-- 공통 Exports -->
-		<Compile Include="..\KKY_Tool_Revit_2019-2023\Exports\ConnectorExport.vb">
-			<Link>Exports\ConnectorExport.vb</Link>
-		</Compile>
-		<Compile Include="..\KKY_Tool_Revit_2019-2023\Exports\DuplicateExport.vb">
-			<Link>Exports\DuplicateExport.vb</Link>
-		</Compile>
-		<Compile Include="..\KKY_Tool_Revit_2019-2023\Exports\PointsExport.vb">
-			<Link>Exports\PointsExport.vb</Link>
-		</Compile>
-
-		<!-- 공통 Infrastructure -->
-		<Compile Include="..\KKY_Tool_Revit_2019-2023\Infrastructure\ExcelCore.vb">
-			<Link>Infrastructure\ExcelCore.vb</Link>
-		</Compile>
-		<Compile Include="..\KKY_Tool_Revit_2019-2023\Infrastructure\ResourceExtractor.vb">
-			<Link>Infrastructure\ResourceExtractor.vb</Link>
-		</Compile>
-
-		<!-- 공통 Services -->
-		<Compile Include="..\KKY_Tool_Revit_2019-2023\Services\DuplicateAnalysisService.vb">
-			<Link>Services\DuplicateAnalysisService.vb</Link>
-		</Compile>
-		<Compile Include="..\KKY_Tool_Revit_2019-2023\Services\ConnectorDiagnosticsService.vb">
-			<Link>Services\ConnectorDiagnosticsService.vb</Link>
-		</Compile>
-		<Compile Include="..\KKY_Tool_Revit_2019-2023\Services\ExportPointsService.vb">
-			<Link>Services\ExportPointsService.vb</Link>
-		</Compile>
-		<Compile Include="..\KKY_Tool_Revit_2019-2023\Services\HubCommonOptionsStorageService.vb">
-			<Link>Services\HubCommonOptionsStorageService.vb</Link>
-		</Compile>
-		<Compile Include="..\KKY_Tool_Revit_2019-2023\Services\ParamPropagateService.vb">
-			<Link>Services\ParamPropagateService.vb</Link>
-		</Compile>
-		<Compile Include="..\KKY_Tool_Revit_2019-2023\Services\SharedParameterStatusService.vb">
-			<Link>Services\SharedParameterStatusService.vb</Link>
-		</Compile>
-		<Compile Include="..\KKY_Tool_Revit_2019-2023\Services\SegmentPmsCheckService.vb">
-			<Link>Services\SegmentPmsCheckService.vb</Link>
-		</Compile>
-
-		<!-- 공통 Hub / Bridge -->
-		<Compile Include="..\KKY_Tool_Revit_2019-2023\UI\Hub\UiBridgeExternalEvent.Export.vb">
-			<Link>UI\Hub\UiBridgeExternalEvent.Export.vb</Link>
-		</Compile>
-		<Compile Include="..\KKY_Tool_Revit_2019-2023\UI\Hub\ExcelProgressReporter.vb">
-			<Link>UI\Hub\ExcelProgressReporter.vb</Link>
-		</Compile>
-		<Compile Include="..\KKY_Tool_Revit_2019-2023\UI\Hub\UiBridgeExternalEvent.Connector.vb">
-			<Link>UI\Hub\UiBridgeExternalEvent.Connector.vb</Link>
-		</Compile>
-		<Compile Include="..\KKY_Tool_Revit_2019-2023\UI\Hub\UiBridgeExternalEvent.Duplicate.vb">
-			<Link>UI\Hub\UiBridgeExternalEvent.Duplicate.vb</Link>
-		</Compile>
-		<Compile Include="..\KKY_Tool_Revit_2019-2023\UI\Hub\UiBridgeExternalEvent.SegmentPms.vb">
-			<Link>UI\Hub\UiBridgeExternalEvent.SegmentPms.vb</Link>
-		</Compile>
-		<Compile Include="..\KKY_Tool_Revit_2019-2023\UI\Hub\UiBridgeExternalEvent.ParamProp.vb">
-			<Link>UI\Hub\UiBridgeExternalEvent.ParamProp.vb</Link>
-		</Compile>
-		<Compile Include="..\KKY_Tool_Revit_2019-2023\UI\Hub\UiBridgeExternalEvent.Core.vb">
-			<Link>UI\Hub\UiBridgeExternalEvent.Core.vb</Link>
-		</Compile>
-		<Compile Include="..\KKY_Tool_Revit_2019-2023\UI\Hub\HubHostWindow.vb">
-			<Link>UI\Hub\HubHostWindow.vb</Link>
-		</Compile>
+		<Compile Include="..\KKY_Tool_Revit_2019-2023\Commands\**\*.vb"
+				 Link="Commands\%(RecursiveDir)%(Filename)%(Extension)" />
+		<Compile Include="..\KKY_Tool_Revit_2019-2023\Infrastructure\**\*.vb"
+				 Link="Infrastructure\%(RecursiveDir)%(Filename)%(Extension)" />
+		<Compile Include="..\KKY_Tool_Revit_2019-2023\Exports\**\*.vb"
+				 Link="Exports\%(RecursiveDir)%(Filename)%(Extension)" />
+		<Compile Include="..\KKY_Tool_Revit_2019-2023\Services\**\*.vb"
+				 Link="Services\%(RecursiveDir)%(Filename)%(Extension)" />
+		<Compile Include="..\KKY_Tool_Revit_2019-2023\UI\Hub\**\*.vb"
+				 Link="UI\Hub\%(RecursiveDir)%(Filename)%(Extension)" />
 	</ItemGroup>
 
 	<!-- 리소스 / HubUI -->
