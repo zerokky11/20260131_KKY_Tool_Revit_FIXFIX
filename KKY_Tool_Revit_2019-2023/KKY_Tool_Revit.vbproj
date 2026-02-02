@@ -77,9 +77,12 @@
 			<HintPath>$(RevitApiDir)\RevitAPIUI.dll</HintPath>
 			<Private>false</Private>
 		</Reference>
+
+		<!-- ✅ JavaScriptSerializer(System.Web.Script.Serialization) 사용을 위한 참조 -->
+		<Reference Include="System.Web.Extensions" />
 	</ItemGroup>
 
-	<!-- NuGet (기존에 이미 참조가 있다면 유지해도 됨) -->
+	<!-- NuGet -->
 	<ItemGroup>
 		<PackageReference Include="NPOI" Version="2.6.1" />
 		<PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2592.51" />

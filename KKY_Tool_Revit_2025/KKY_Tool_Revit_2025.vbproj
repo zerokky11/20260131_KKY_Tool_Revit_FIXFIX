@@ -113,6 +113,16 @@
 		<Compile Include="..\KKY_Tool_Revit_2019-2023\Infrastructure\ExcelCore.vb">
 			<Link>Infrastructure\ExcelCore.vb</Link>
 		</Compile>
+		<!-- ✅ 누락 링크 추가 -->
+		<Compile Include="..\KKY_Tool_Revit_2019-2023\Infrastructure\ExcelStyleHelper.vb">
+			<Link>Infrastructure\ExcelStyleHelper.vb</Link>
+		</Compile>
+		<Compile Include="..\KKY_Tool_Revit_2019-2023\Infrastructure\ExcelExportStyleRegistry.vb">
+			<Link>Infrastructure\ExcelExportStyleRegistry.vb</Link>
+		</Compile>
+		<Compile Include="..\KKY_Tool_Revit_2019-2023\Infrastructure\ElementIdCompat.vb">
+			<Link>Infrastructure\ElementIdCompat.vb</Link>
+		</Compile>
 		<Compile Include="..\KKY_Tool_Revit_2019-2023\Infrastructure\ResourceExtractor.vb">
 			<Link>Infrastructure\ResourceExtractor.vb</Link>
 		</Compile>

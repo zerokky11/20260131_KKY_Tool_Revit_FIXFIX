@@ -1,6 +1,8 @@
-﻿Imports System.Data
+﻿Imports System
+Imports System.Collections.Generic
+Imports System.Data
 
-Namespace KKY_Tool_Revit.Infrastructure
+Namespace Infrastructure
 
     Public Module ExcelExportStyleRegistry
 
@@ -8,6 +10,7 @@ Namespace KKY_Tool_Revit.Infrastructure
 
         Private ReadOnly _resolvers As New Dictionary(Of String, RowStatusResolver)(StringComparer.OrdinalIgnoreCase)
 
+        ' Module에서는 Shared Sub New() 금지 → Sub New() 로
         Sub New()
             ' 기본 규칙 등록 (필요하면 기능별로 Register로 덮어쓰기 가능)
             Register("connector", AddressOf ResolveConnector)
@@ -67,25 +70,24 @@ Namespace KKY_Tool_Revit.Infrastructure
         ' ---- 기능별 기본 Resolver들 ----
 
         Private Function ResolveConnector(row As DataRow, table As DataTable) As ExcelStyleHelper.RowStatus
-            ' Multi 쪽에서 "Status" = "오류 없음" 형태가 기본값임:contentReference[oaicite:5]{index=5}
             Dim statusText = GetColText(row, table, "Status")
             If IsOkLike(statusText) Then Return ExcelStyleHelper.RowStatus.None
 
-            If LooksError(statusText) Then Return ExcelStyleHelper.RowStatus.Error
+            If LooksError(statusText) Then Return ExcelStyleHelper.RowStatus.[Error]
             Return ExcelStyleHelper.RowStatus.Warning
         End Function
 
         Private Function ResolveIssueLike(row As DataRow, table As DataTable) As ExcelStyleHelper.RowStatus
             Dim issue = GetColText(row, table, "Issue")
             If IsOkLike(issue) Then Return ExcelStyleHelper.RowStatus.None
-            If LooksError(issue) Then Return ExcelStyleHelper.RowStatus.Error
+            If LooksError(issue) Then Return ExcelStyleHelper.RowStatus.[Error]
             Return ExcelStyleHelper.RowStatus.Warning
         End Function
 
         Private Function ResolveResultLike(row As DataRow, table As DataTable) As ExcelStyleHelper.RowStatus
             Dim result = GetColText(row, table, "Result")
             If IsOkLike(result) Then Return ExcelStyleHelper.RowStatus.None
-            If LooksError(result) Then Return ExcelStyleHelper.RowStatus.Error
+            If LooksError(result) Then Return ExcelStyleHelper.RowStatus.[Error]
             Return ExcelStyleHelper.RowStatus.Warning
         End Function
 
@@ -104,7 +106,7 @@ Namespace KKY_Tool_Revit.Infrastructure
 
             If String.IsNullOrWhiteSpace(txt) Then Return ExcelStyleHelper.RowStatus.None
             If IsOkLike(txt) Then Return ExcelStyleHelper.RowStatus.None
-            If LooksError(txt) Then Return ExcelStyleHelper.RowStatus.Error
+            If LooksError(txt) Then Return ExcelStyleHelper.RowStatus.[Error]
             Return ExcelStyleHelper.RowStatus.Warning
         End Function
 

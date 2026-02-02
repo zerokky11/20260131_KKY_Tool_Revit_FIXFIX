@@ -1,11 +1,15 @@
-﻿Imports System.Data
+﻿Imports System
+Imports System.Collections.Generic
+Imports System.Data
 Imports System.IO
+Imports System.Runtime.InteropServices
 Imports System.Text
 Imports System.Windows.Forms
 Imports NPOI.SS.UserModel
+Imports NPOI.SS.Util
 Imports NPOI.XSSF.UserModel
 
-Namespace KKY_Tool_Revit.Infrastructure
+Namespace Infrastructure
 
     Public Module ExcelCore
 
@@ -167,11 +171,7 @@ Namespace KKY_Tool_Revit.Infrastructure
             Next
 
             If autoFit Then
-                Try
-                    sheet.TrackAllColumnsForAutoSizing()
-                Catch
-                    ' ignore
-                End Try
+                TryTrackAllColumnsForAutoSizing(sheet)
                 For c As Integer = 0 To colCount - 1
                     Try
                         sheet.AutoSizeColumn(c)
@@ -267,7 +267,358 @@ Namespace KKY_Tool_Revit.Infrastructure
             Return t
         End Function
 
-        ' progressKey는 UiBridge에서 "hub:multi-progress" 같은 채널로 쓰는 구조가 있어서:contentReference[oaicite:6]{index=6}
+        ' ---------------- 추가: SegmentPms/Connector 등에서 호출되는 스타일 헬퍼 ----------------
+
+        Public Sub ApplyStandardSheetStyle(wb As IWorkbook,
+                                           sh As ISheet,
+                                           Optional headerRowIndex As Integer = 0,
+                                           Optional autoFilter As Boolean = True,
+                                           Optional freezeTopRow As Boolean = True,
+                                           Optional borderAll As Boolean = False,
+                                           Optional autoFit As Boolean = False)
+
+            If wb Is Nothing OrElse sh Is Nothing Then Return
+
+            If freezeTopRow Then
+                Try
+                    sh.CreateFreezePane(0, headerRowIndex + 1)
+                Catch
+                End Try
+            End If
+
+            If autoFilter Then
+                Try
+                    Dim headerRow = sh.GetRow(headerRowIndex)
+                    If headerRow IsNot Nothing Then
+                        Dim lastCol As Integer = CInt(headerRow.LastCellNum) - 1
+                        If lastCol >= 0 Then
+                            Dim lastRow As Integer = Math.Max(headerRowIndex, sh.LastRowNum)
+                            Dim range As New CellRangeAddress(headerRowIndex, lastRow, 0, lastCol)
+                            TrySetAutoFilter(sh, range)
+                        End If
+                    End If
+                Catch
+                End Try
+            End If
+
+            If borderAll Then
+                TryApplyThinBorderToUsedRange(wb, sh)
+            End If
+
+            If autoFit Then
+                TryTrackAllColumnsForAutoSizing(sh)
+                Dim headerRow = sh.GetRow(headerRowIndex)
+                Dim lastCol As Integer = If(headerRow Is Nothing, -1, CInt(headerRow.LastCellNum) - 1)
+                If lastCol >= 0 Then
+                    For c As Integer = 0 To lastCol
+                        Try
+                            sh.AutoSizeColumn(c)
+                        Catch
+                        End Try
+                    Next
+                End If
+            End If
+        End Sub
+
+        Public Sub ApplyNumberFormatByHeader(wb As IWorkbook,
+                                            sh As ISheet,
+                                            headerRowIndex As Integer,
+                                            headers As IEnumerable(Of String),
+                                            numberFormat As String)
+
+            If wb Is Nothing OrElse sh Is Nothing OrElse headers Is Nothing Then Return
+
+            Dim headerRow = sh.GetRow(headerRowIndex)
+            If headerRow Is Nothing Then Return
+
+            Dim headerSet As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
+            For Each h In headers
+                If Not String.IsNullOrWhiteSpace(h) Then headerSet.Add(h.Trim())
+            Next
+            If headerSet.Count = 0 Then Return
+
+            Dim targetCols As New List(Of Integer)()
+            Dim fmt As New DataFormatter()
+            Dim eval = wb.GetCreationHelper().CreateFormulaEvaluator()
+
+            Dim lastCol As Integer = CInt(headerRow.LastCellNum) - 1
+            For c As Integer = 0 To lastCol
+                Dim cell = headerRow.GetCell(c)
+                Dim text As String = ""
+                Try
+                    text = fmt.FormatCellValue(cell, eval).Trim()
+                Catch
+                End Try
+
+                If headerSet.Contains(text) Then
+                    targetCols.Add(c)
+                End If
+            Next
+            If targetCols.Count = 0 Then Return
+
+            Dim fmtIdx As Short = wb.CreateDataFormat().GetFormat(If(String.IsNullOrWhiteSpace(numberFormat), "0.###############", numberFormat))
+
+            Dim styleCache As New Dictionary(Of Integer, ICellStyle)()
+
+            For r As Integer = headerRowIndex + 1 To sh.LastRowNum
+                Dim row = sh.GetRow(r)
+                If row Is Nothing Then Continue For
+
+                For Each c In targetCols
+                    Dim cell = row.GetCell(c)
+                    If cell Is Nothing Then Continue For
+
+                    If cell.CellType = CellType.Numeric OrElse cell.CellType = CellType.Formula Then
+                        Dim baseStyle = cell.CellStyle
+                        Dim key As Integer = If(baseStyle Is Nothing, -1, CInt(baseStyle.Index))
+
+                        Dim newStyle As ICellStyle = Nothing
+                        If Not styleCache.TryGetValue(key, newStyle) Then
+                            newStyle = wb.CreateCellStyle()
+                            If baseStyle IsNot Nothing Then newStyle.CloneStyleFrom(baseStyle)
+                            newStyle.DataFormat = fmtIdx
+                            styleCache(key) = newStyle
+                        End If
+
+                        cell.CellStyle = newStyle
+                    End If
+                Next
+            Next
+        End Sub
+
+        Public Sub ApplyResultFillByHeader(wb As IWorkbook, sh As ISheet, headerRowIndex As Integer)
+            If wb Is Nothing OrElse sh Is Nothing Then Return
+
+            Dim headerRow = sh.GetRow(headerRowIndex)
+            If headerRow Is Nothing Then Return
+
+            Dim fmt As New DataFormatter()
+            Dim eval = wb.GetCreationHelper().CreateFormulaEvaluator()
+
+            Dim resultCol As Integer = -1
+            Dim lastCol As Integer = CInt(headerRow.LastCellNum) - 1
+
+            For c As Integer = 0 To lastCol
+                Dim h As String = ""
+                Try
+                    h = fmt.FormatCellValue(headerRow.GetCell(c), eval).Trim()
+                Catch
+                End Try
+
+                Dim norm = NormalizeHeader(h)
+                If norm = "result" OrElse norm = "status" Then
+                    resultCol = c
+                    Exit For
+                End If
+            Next
+
+            If resultCol < 0 Then Return
+
+            Dim warnCache As New Dictionary(Of Integer, ICellStyle)()
+            Dim errCache As New Dictionary(Of Integer, ICellStyle)()
+
+            For r As Integer = headerRowIndex + 1 To sh.LastRowNum
+                Dim row = sh.GetRow(r)
+                If row Is Nothing Then Continue For
+
+                Dim cell = row.GetCell(resultCol)
+                If cell Is Nothing Then Continue For
+
+                Dim text As String = ""
+                Try
+                    text = fmt.FormatCellValue(cell, eval)
+                Catch
+                End Try
+
+                Dim cls As Integer = ClassifyResult(text) ' 0=ok, 1=warn, 2=err
+                If cls = 0 Then Continue For
+
+                Dim baseStyle = cell.CellStyle
+                Dim key As Integer = If(baseStyle Is Nothing, -1, CInt(baseStyle.Index))
+
+                If cls = 2 Then
+                    Dim st As ICellStyle = Nothing
+                    If Not errCache.TryGetValue(key, st) Then
+                        st = wb.CreateCellStyle()
+                        If baseStyle IsNot Nothing Then st.CloneStyleFrom(baseStyle)
+                        st.FillForegroundColor = IndexedColors.Rose.Index
+                        st.FillPattern = FillPattern.SolidForeground
+                        errCache(key) = st
+                    End If
+                    cell.CellStyle = st
+                ElseIf cls = 1 Then
+                    Dim st As ICellStyle = Nothing
+                    If Not warnCache.TryGetValue(key, st) Then
+                        st = wb.CreateCellStyle()
+                        If baseStyle IsNot Nothing Then st.CloneStyleFrom(baseStyle)
+                        st.FillForegroundColor = IndexedColors.LightYellow.Index
+                        st.FillPattern = FillPattern.SolidForeground
+                        warnCache(key) = st
+                    End If
+                    cell.CellStyle = st
+                End If
+            Next
+        End Sub
+
+        Public Sub TryAutoFitWithExcel(xlsxPath As String)
+            If String.IsNullOrWhiteSpace(xlsxPath) Then Return
+            If Not File.Exists(xlsxPath) Then Return
+
+            Dim excelApp As Object = Nothing
+            Dim wbs As Object = Nothing
+            Dim wb As Object = Nothing
+
+            Try
+                excelApp = CreateObject("Excel.Application")
+                If excelApp Is Nothing Then Return
+
+                excelApp.DisplayAlerts = False
+                excelApp.Visible = False
+
+                wbs = excelApp.Workbooks
+                wb = wbs.Open(xlsxPath)
+
+                Dim sheets As Object = Nothing
+                Try
+                    sheets = wb.Worksheets
+                    For Each ws As Object In sheets
+                        Try
+                            ws.Cells.EntireColumn.AutoFit()
+                            ws.Cells.EntireRow.AutoFit()
+                        Catch
+                        Finally
+                            ReleaseCom(ws)
+                        End Try
+                    Next
+                Catch
+                Finally
+                    ReleaseCom(sheets)
+                End Try
+
+                Try
+                    wb.Save()
+                Catch
+                End Try
+
+            Catch
+                ' ignore (Excel 미설치/권한/보안정책 등)
+            Finally
+                Try
+                    If wb IsNot Nothing Then wb.Close(SaveChanges:=True)
+                Catch
+                End Try
+                Try
+                    If excelApp IsNot Nothing Then excelApp.Quit()
+                Catch
+                End Try
+
+                ReleaseCom(wb)
+                ReleaseCom(wbs)
+                ReleaseCom(excelApp)
+            End Try
+        End Sub
+
+        Private Sub ReleaseCom(o As Object)
+            Try
+                If o Is Nothing Then Return
+                If Marshal.IsComObject(o) Then
+                    Marshal.FinalReleaseComObject(o)
+                End If
+            Catch
+            End Try
+        End Sub
+
+        Private Sub TryTrackAllColumnsForAutoSizing(sheet As ISheet)
+            If sheet Is Nothing Then Return
+            Try
+                Dim mi = sheet.GetType().GetMethod("TrackAllColumnsForAutoSizing", Type.EmptyTypes)
+                If mi IsNot Nothing Then mi.Invoke(sheet, Nothing)
+            Catch
+            End Try
+        End Sub
+
+        Private Sub TrySetAutoFilter(sheet As ISheet, range As CellRangeAddress)
+            If sheet Is Nothing OrElse range Is Nothing Then Return
+            Try
+                Dim mi = sheet.GetType().GetMethod("SetAutoFilter", New Type() {GetType(CellRangeAddress)})
+                If mi IsNot Nothing Then mi.Invoke(sheet, New Object() {range})
+            Catch
+            End Try
+        End Sub
+
+        Private Sub TryApplyThinBorderToUsedRange(wb As IWorkbook, sh As ISheet)
+            If wb Is Nothing OrElse sh Is Nothing Then Return
+
+            Dim maxCol As Integer = GetMaxUsedColumnIndex(sh)
+            If maxCol < 0 Then Return
+
+            Dim cache As New Dictionary(Of Integer, ICellStyle)()
+
+            For r As Integer = 0 To sh.LastRowNum
+                Dim row = sh.GetRow(r)
+                If row Is Nothing Then Continue For
+
+                For c As Integer = 0 To maxCol
+                    Dim cell = row.GetCell(c)
+                    If cell Is Nothing Then
+                        cell = row.CreateCell(c)
+                        cell.SetCellValue("")
+                    End If
+
+                    Dim baseStyle = cell.CellStyle
+                    Dim key As Integer = If(baseStyle Is Nothing, -1, CInt(baseStyle.Index))
+
+                    Dim st As ICellStyle = Nothing
+                    If Not cache.TryGetValue(key, st) Then
+                        st = wb.CreateCellStyle()
+                        If baseStyle IsNot Nothing Then st.CloneStyleFrom(baseStyle)
+                        st.BorderBottom = NPOI.SS.UserModel.BorderStyle.Thin
+                        st.BorderTop = NPOI.SS.UserModel.BorderStyle.Thin
+                        st.BorderLeft = NPOI.SS.UserModel.BorderStyle.Thin
+                        st.BorderRight = NPOI.SS.UserModel.BorderStyle.Thin
+                        cache(key) = st
+                    End If
+
+                    cell.CellStyle = st
+                Next
+            Next
+        End Sub
+
+        Private Function GetMaxUsedColumnIndex(sh As ISheet) As Integer
+            Dim maxCol As Integer = -1
+            For r As Integer = 0 To sh.LastRowNum
+                Dim row = sh.GetRow(r)
+                If row Is Nothing Then Continue For
+
+                Dim lastCellNum As Integer = CInt(row.LastCellNum)
+                If lastCellNum <= 0 Then Continue For
+
+                Dim lastIdx As Integer = lastCellNum - 1
+                If lastIdx > maxCol Then maxCol = lastIdx
+            Next
+            Return maxCol
+        End Function
+
+        Private Function NormalizeHeader(s As String) As String
+            If String.IsNullOrWhiteSpace(s) Then Return ""
+            Return s.Trim().ToLowerInvariant().Replace(" ", "").Replace("_", "")
+        End Function
+
+        Private Function ClassifyResult(s As String) As Integer
+            If String.IsNullOrWhiteSpace(s) Then Return 0
+            Dim t = s.Trim().ToLowerInvariant()
+
+            If t = "ok" OrElse t = "pass" OrElse t = "success" Then Return 0
+            If t.Contains("오류 없음") OrElse t.Contains("정상") OrElse t.Contains("이상 없음") Then Return 0
+
+            If t.Contains("error") OrElse t.Contains("fail") OrElse t.Contains("mismatch") Then Return 2
+            If t.Contains("실패") OrElse t.Contains("오류") OrElse t.Contains("불일치") Then Return 2
+
+            If t.Contains("na") OrElse t.Contains("n/a") OrElse t.Contains("missing") OrElse t.Contains("없음") Then Return 1
+            Return 1
+        End Function
+
+        ' progressKey는 UiBridge에서 "hub:multi-progress" 같은 채널로 쓰는 구조가 있어서
         ' 여기서는 있으면 최대한 조용히 반영(리플렉션)하고, 없어도 기능은 정상 동작하게 처리
         Private Sub TryReportProgress(progressKey As String, current As Integer, total As Integer, sheetName As String)
             If String.IsNullOrWhiteSpace(progressKey) Then Return
@@ -275,7 +626,7 @@ Namespace KKY_Tool_Revit.Infrastructure
                 Dim t = Type.GetType("KKY_Tool_Revit.UI.Hub.ExcelProgressReporter, " & GetType(ExcelCore).Assembly.FullName, throwOnError:=False)
                 If t Is Nothing Then Return
 
-                Dim mi = t.GetMethod("Report", Reflection.BindingFlags.Public Or Reflection.BindingFlags.Static)
+                Dim mi = t.GetMethod("Report", System.Reflection.BindingFlags.Public Or System.Reflection.BindingFlags.Static)
                 If mi Is Nothing Then Return
 
                 Dim percent As Double = 0

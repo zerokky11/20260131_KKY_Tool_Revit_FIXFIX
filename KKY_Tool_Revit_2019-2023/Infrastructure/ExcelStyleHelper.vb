@@ -1,7 +1,8 @@
-﻿Imports System.Runtime.CompilerServices
+﻿Imports System
+Imports System.Runtime.CompilerServices
 Imports NPOI.SS.UserModel
 
-Namespace KKY_Tool_Revit.Infrastructure
+Namespace Infrastructure
 
     Public Module ExcelStyleHelper
 
@@ -22,7 +23,9 @@ Namespace KKY_Tool_Revit.Infrastructure
         Private ReadOnly _wbStyles As New ConditionalWeakTable(Of IWorkbook, StyleSet)()
 
         Private Function GetStyleSet(wb As IWorkbook) As StyleSet
-            Return _wbStyles.GetValue(wb, Function(_) CreateStyleSet(wb))
+            If wb Is Nothing Then Throw New ArgumentNullException(NameOf(wb))
+            ' VB에서 Function(_) 는 식별자 오류가 날 수 있어 정상 이름으로 변경
+            Return _wbStyles.GetValue(wb, Function(key) CreateStyleSet(key))
         End Function
 
         Private Function CreateStyleSet(wb As IWorkbook) As StyleSet
@@ -35,6 +38,7 @@ Namespace KKY_Tool_Revit.Infrastructure
             header.SetFont(hf)
             header.Alignment = HorizontalAlignment.Center
             header.VerticalAlignment = VerticalAlignment.Center
+            header.WrapText = True
             header.FillForegroundColor = IndexedColors.Grey25Percent.Index
             header.FillPattern = FillPattern.SolidForeground
             header.BorderBottom = BorderStyle.Thin
@@ -88,8 +92,8 @@ Namespace KKY_Tool_Revit.Infrastructure
 
         Public Sub ApplyStyleToRow(row As IRow, colCount As Integer, style As ICellStyle)
             If row Is Nothing OrElse style Is Nothing Then Return
-            Dim lastCol As Integer = Math.Max(0, colCount - 1)
 
+            Dim lastCol As Integer = Math.Max(0, colCount - 1)
             For c As Integer = 0 To lastCol
                 Dim cell = row.GetCell(c)
                 If cell Is Nothing Then
