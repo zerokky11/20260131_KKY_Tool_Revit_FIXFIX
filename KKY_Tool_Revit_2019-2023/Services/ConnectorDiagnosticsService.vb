@@ -170,22 +170,35 @@ Namespace Services
 
                 Log($"DOC={fileLabel}, tolFt={tolFt:0.###}, param='{param}', extra={String.Join(",", normalizedExtras)}, targetFilter='{targetFilter}', excludeEndDummy={excludeEndDummy}, includeOkRows={includeOkRows}")
 
-                Dim elems = CollectElementsWithConnectors(doc, filter, excludeEndDummy)
-                Log($"수집 요소: {elems.Count}")
+                Dim allElems = CollectElementsWithConnectors(doc, Nothing, excludeEndDummy)
+                Log($"수집 요소(전체): {allElems.Count}")
 
-                If elems.Count = 0 Then
+                If allElems.Count = 0 Then
                     Log("커넥터를 가진 요소가 없습니다.")
                     Return rows
                 End If
 
-                Dim allowedIds As HashSet(Of Integer) = New HashSet(Of Integer)(elems.Select(Function(e) e.Id.IntegerValue))
+                ' targetFilter가 있으면: 필터에 해당하는 요소만 "기준 요소"로 처리하되,
+                ' 상대 요소는 필터에 해당하지 않아도 결과에 포함되도록 전체 요소의 커넥터로 버킷을 구성한다.
+                Dim seedElems As List(Of Element) = allElems
+                If filter IsNot Nothing AndAlso filter.Evaluator IsNot Nothing Then
+                    seedElems = allElems.Where(Function(e) IsElementAllowed(e, filter, excludeEndDummy)).ToList()
+                End If
+                Log($"필터 대상 요소: {seedElems.Count}")
+
+                If seedElems.Count = 0 Then
+                    Log("필터 조건에 해당하는 요소가 없습니다.")
+                    Return rows
+                End If
+
+                Dim allowedIds As HashSet(Of Integer) = New HashSet(Of Integer)(allElems.Select(Function(e) e.Id.IntegerValue))
 
                 Dim elemConns As New Dictionary(Of Integer, List(Of Connector))()
-                For Each el In elems
+                For Each el In allElems
                     elemConns(el.Id.IntegerValue) = GetConnectors(el)
                 Next
 
-                Dim totalElem As Integer = Math.Max(1, elems.Count)
+                Dim totalElem As Integer = Math.Max(1, seedElems.Count)
                 Dim lastSentPct As Double = -1
                 Dim seenPairs As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
 
@@ -208,8 +221,8 @@ Namespace Services
                 Dim buckets = BuildGrid(allConnPoints)
                 Log($"버킷 수: {buckets.Count}")
 
-                For i As Integer = 0 To elems.Count - 1
-                    Dim el = elems(i)
+                For i As Integer = 0 To seedElems.Count - 1
+                    Dim el = seedElems(i)
                     Dim baseId = el.Id.IntegerValue
                     Dim conns = elemConns(baseId)
 

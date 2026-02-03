@@ -388,7 +388,19 @@ export function renderConn(root) {
     exporting = true;
     updateSaveDisabled();
     run.disabled = true;
-    chooseExcelMode((mode) => post('connector:save-excel', { excelMode: mode || 'fast' }));
+    chooseExcelMode((mode) => {
+      const tab = state.tab || 'mismatch';
+      const uiUnit = String(unit.value || 'inch');
+      post('connector:save-excel', {
+        excelMode: mode || 'fast',
+        tab,
+        uiUnit,
+        param: String(param.value || 'Comments'),
+        extraParams: String(extra.value || ''),
+        targetFilter: String(targetFilter.value || ''),
+        excludeEndDummy: !!excludeCheckbox.checked
+      });
+    });
   }
 
 

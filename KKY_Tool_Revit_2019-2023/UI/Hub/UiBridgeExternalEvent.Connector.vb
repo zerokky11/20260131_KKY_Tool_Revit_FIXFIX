@@ -280,11 +280,55 @@ Namespace UI.Hub
                     Return
                 End If
 
-                Dim mismatchCount As Integer = CountMismatches(filteredTotal)
+                ' --- Export scope/options (UI 설정 반영) ---
+                Dim exportTab As String = ""
+                Try
+                    exportTab = TryCast(GetProp(payload, "tab"), String)
+                Catch
+                    exportTab = ""
+                End Try
+                exportTab = If(exportTab, "").Trim().ToLowerInvariant()
+
+                Dim uiUnit As String = ""
+                Try
+                    uiUnit = TryCast(GetProp(payload, "uiUnit"), String)
+                Catch
+                    uiUnit = ""
+                End Try
+                If String.IsNullOrWhiteSpace(uiUnit) Then
+                    Try
+                        uiUnit = TryCast(GetProp(payload, "displayUnit"), String)
+                    Catch
+                        uiUnit = ""
+                    End Try
+                End If
+                uiUnit = If(uiUnit, "inch").Trim().ToLowerInvariant()
+                If uiUnit = "millimeter" Then uiUnit = "mm"
+                If uiUnit <> "mm" Then uiUnit = "inch"
+
+                Dim exportRows As List(Of Dictionary(Of String, Object)) = filteredTotal
+                If exportTab = "mismatch" Then
+                    exportRows = filteredTotal.Where(Function(r)
+                                                         Dim st = ReadField(r, "Status")
+                                                         Return IsMismatchRow(r) OrElse String.Equals(st, "ERROR", StringComparison.OrdinalIgnoreCase)
+                                                     End Function).ToList()
+                ElseIf exportTab = "not-connected" OrElse exportTab = "notconnected" OrElse exportTab = "not_connected" Then
+                    exportRows = filteredTotal.Where(Function(r)
+                                                         Dim st = ReadField(r, "Status")
+                                                         Return IsNearConnection(r) OrElse String.Equals(st, "ERROR", StringComparison.OrdinalIgnoreCase)
+                                                     End Function).ToList()
+                End If
+
+                If exportRows Is Nothing OrElse exportRows.Count = 0 Then
+                    System.Windows.Forms.MessageBox.Show("해당 탭에 내보낼 항목이 없습니다.", "검토 결과", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                    Return
+                End If
+
+                Dim mismatchCount As Integer = CountMismatches(exportRows)
 
                 Dim doAutoFit As Boolean = ParseExcelMode(payload)
                 Global.KKY_Tool_Revit.UI.Hub.ExcelProgressReporter.Reset("connector:progress")
-                Dim saved As String = SaveRowsToExcel(filteredTotal, mismatchCount, _connectorExtraParams, doAutoFit, "connector:progress")
+                Dim saved As String = SaveRowsToExcel(exportRows, mismatchCount, _connectorExtraParams, doAutoFit, "connector:progress", uiUnit)
 
                 SendToWeb("connector:saved", New With {.path = saved})
 
@@ -439,13 +483,22 @@ Namespace UI.Hub
             Return False
         End Function
 
+        Private Shared Function IsParamCompareMatch(row As Dictionary(Of String, Object)) As Boolean
+            If row Is Nothing Then Return False
+            Dim pc As String = ReadField(row, "ParamCompare")
+            Return String.Equals(pc, "Match", StringComparison.OrdinalIgnoreCase)
+        End Function
+
         Private Shared Function ShouldExportToExcel(row As Dictionary(Of String, Object)) As Boolean
             If row Is Nothing Then Return False
+            If IsParamCompareMatch(row) Then Return False
             Dim status As String = ReadField(row, "Status")
             Return IsIssueStatus(status)
         End Function
 
         Private Shared Function ShouldIncludeRow(r As Dictionary(Of String, Object)) As Boolean
+            If r Is Nothing Then Return False
+            If IsParamCompareMatch(r) Then Return False
             If IsMismatchRow(r) Then Return True
             If IsNearConnection(r) Then Return True
             Dim status As String = ReadField(r, "Status")
@@ -471,7 +524,8 @@ Namespace UI.Hub
                                          Optional mismatchCount As Integer = -1,
                                          Optional extraParams As List(Of String) = Nothing,
                                          Optional doAutoFit As Boolean = False,
-                                         Optional progressChannel As String = Nothing) As String
+                                         Optional progressChannel As String = Nothing,
+                                         Optional uiUnit As String = "inch") As String
             Dim todayToken As String = Date.Now.ToString("yyMMdd")
             Dim count As Integer = If(mismatchCount < 0, CountMismatches(totalRows), mismatchCount)
             Dim defaultName As String = $"{todayToken}_커넥터기반 속성값 검토 결과_{count}개.xlsx"
@@ -499,13 +553,13 @@ Namespace UI.Hub
                             Dim headersTotal = BuildHeaders(extrasHeaders)
                             Dim baseStyle As ICellStyle = CreateBorderedStyle(wb)
                             Dim headerStyle As ICellStyle = CreateHeaderStyle(wb, baseStyle)
-                            Dim mismatchStyle As ICellStyle = CreateFillStyle(wb, baseStyle, New Byte() {&HF9, &HD3, &HD7}) ' light red
-                            Dim matchStyle As ICellStyle = CreateFillStyle(wb, baseStyle, New Byte() {&HD6, &HEF, &HD6})   ' light green
-                            Dim nearStyle As ICellStyle = CreateFillStyle(wb, baseStyle, New Byte() {&HFA, &HF3, &HD1})    ' light yellow
-                            Dim errorStyle As ICellStyle = CreateFillStyle(wb, baseStyle, New Byte() {&HFD, &HEA, &HCC})   ' light orange
+                            Dim mismatchStyle As ICellStyle = CreateFillStyle(wb, baseStyle, New Byte() {&HF8, &HD7, &HDA}) ' light red
+                            Dim matchStyle As ICellStyle = CreateFillStyle(wb, baseStyle, New Byte() {&HD1, &HE7, &HDD})   ' light green
+                            Dim nearStyle As ICellStyle = CreateFillStyle(wb, baseStyle, New Byte() {&HFF, &HF3, &HCD})    ' light yellow
+                            Dim errorStyle As ICellStyle = CreateFillStyle(wb, baseStyle, New Byte() {&HFF, &HE8, &HCC})   ' light orange
 
                             Dim totalBase = totalRows.Select(Function(r) StripExtras(r, extrasHeaders)).ToList()
-                            WriteSheet(wb, "Total", headersTotal, totalBase, headerStyle, baseStyle, matchStyle, mismatchStyle, nearStyle, errorStyle, progressChannel, written, totalCount, doAutoFit)
+                            WriteSheet(wb, "Total", headersTotal, totalBase, headerStyle, baseStyle, matchStyle, mismatchStyle, nearStyle, errorStyle, progressChannel, written, totalCount, doAutoFit, uiUnit)
 
                             wb.Write(fs)
                         End Using
@@ -804,13 +858,18 @@ Namespace UI.Hub
                                       Optional progressChannel As String = Nothing,
                                       Optional ByRef written As Integer = 0,
                                       Optional totalRows As Integer = 0,
-                                      Optional doAutoFit As Boolean = False)
+                                      Optional doAutoFit As Boolean = False,
+                                      Optional uiUnit As String = "inch")
             Dim sh = wb.CreateSheet(sheetName)
 
             Dim headerRow = sh.CreateRow(0)
             For i = 0 To headers.Count - 1
                 Dim c = headerRow.CreateCell(i)
-                c.SetCellValue(headers(i))
+                Dim headerText As String = headers(i)
+                If String.Equals(headerText, "Distance (inch)", StringComparison.OrdinalIgnoreCase) AndAlso String.Equals(uiUnit, "mm", StringComparison.OrdinalIgnoreCase) Then
+                    headerText = "Distance (mm)"
+                End If
+                c.SetCellValue(headerText)
                 c.CellStyle = headerStyle
             Next
 
@@ -860,7 +919,35 @@ Namespace UI.Hub
                             End If
                         End If
 
-                        cell.SetCellValue(text)
+                        If String.Equals(key, "Distance (inch)", StringComparison.OrdinalIgnoreCase) Then
+                            Dim d As Double
+                            Dim ok As Boolean = False
+                            If v IsNot Nothing Then
+                                Try
+                                    d = Convert.ToDouble(v)
+                                    ok = True
+                                Catch
+                                End Try
+                            End If
+                            If Not ok Then
+                                Dim tmp As Double
+                                If Double.TryParse(text.Trim(), tmp) Then
+                                    d = tmp
+                                    ok = True
+                                End If
+                            End If
+
+                            If ok Then
+                                If String.Equals(uiUnit, "mm", StringComparison.OrdinalIgnoreCase) Then
+                                    d = d * 25.4R
+                                End If
+                                cell.SetCellValue(d)
+                            Else
+                                cell.SetCellValue(text)
+                            End If
+                        Else
+                            cell.SetCellValue(text)
+                        End If
                         cell.CellStyle = styleToUse
                     Next
                     written += 1
