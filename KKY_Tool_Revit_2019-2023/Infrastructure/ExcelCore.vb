@@ -97,6 +97,100 @@ Namespace Infrastructure
             End Using
         End Sub
 
+
+        Public Sub SaveStyledSimple(filePath As String,
+                                    title As String,
+                                    table As DataTable,
+                                    groupHeader As String,
+                                    Optional autoFit As Boolean = False,
+                                    Optional progressKey As String = Nothing)
+
+            If String.IsNullOrWhiteSpace(filePath) Then Throw New ArgumentNullException(NameOf(filePath))
+            If table Is Nothing Then Throw New ArgumentNullException(NameOf(table))
+
+            EnsureDir(filePath)
+
+            Using wb As IWorkbook = New XSSFWorkbook()
+                Dim baseName As String = If(String.IsNullOrWhiteSpace(title),
+                                            If(String.IsNullOrWhiteSpace(table.TableName), "Sheet1", table.TableName),
+                                            title)
+
+                Dim safeSheet = NormalizeSheetName(baseName)
+                Dim sh = wb.CreateSheet(safeSheet)
+
+                ' 1) 값 쓰기 (AutoFit은 스타일 적용 후 마지막에)
+                WriteTableToSheet(wb, sh, safeSheet, table, sheetKey:=title, autoFit:=False, progressKey:=progressKey)
+
+                ' 2) 그룹 밴딩 (DuplicateExport: "Group" 컬럼)
+                If Not String.IsNullOrWhiteSpace(groupHeader) Then
+                    TryApplyGroupBanding(wb, sh, table, groupHeader)
+                End If
+
+                ' 3) 기본 시트 스타일 (Freeze/Filter/Border/AutoFit)
+                ApplyStandardSheetStyle(wb, sh, headerRowIndex:=0, autoFilter:=True, freezeTopRow:=True, borderAll:=True, autoFit:=autoFit)
+
+                Using fs As New FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None)
+                    wb.Write(fs)
+                End Using
+            End Using
+        End Sub
+
+        Private Sub TryApplyGroupBanding(wb As IWorkbook, sh As ISheet, table As DataTable, groupHeader As String)
+            If wb Is Nothing OrElse sh Is Nothing OrElse table Is Nothing Then Return
+            If String.IsNullOrWhiteSpace(groupHeader) Then Return
+            If table.Columns.Count = 0 OrElse table.Rows.Count = 0 Then Return
+
+            Dim groupCol As Integer = -1
+            For c As Integer = 0 To table.Columns.Count - 1
+                If String.Equals(table.Columns(c).ColumnName, groupHeader, StringComparison.OrdinalIgnoreCase) Then
+                    groupCol = c
+                    Exit For
+                End If
+            Next
+            If groupCol < 0 Then Return
+
+            Dim cache As New Dictionary(Of Integer, ICellStyle)()
+            Dim lastKey As String = Nothing
+            Dim band As Boolean = False
+
+            For r As Integer = 0 To table.Rows.Count - 1
+                Dim v = table.Rows(r)(groupCol)
+                Dim keyText As String = If(v Is Nothing OrElse v Is DBNull.Value, "", v.ToString())
+
+                If lastKey Is Nothing Then
+                    lastKey = keyText
+                ElseIf Not String.Equals(lastKey, keyText, StringComparison.Ordinal) Then
+                    band = Not band
+                    lastKey = keyText
+                End If
+
+                If Not band Then Continue For
+
+                Dim row = sh.GetRow(r + 1) ' header=0, data starts at 1
+                If row Is Nothing Then Continue For
+
+                Dim lastCol As Integer = table.Columns.Count - 1
+                For c As Integer = 0 To lastCol
+                    Dim cell = row.GetCell(c)
+                    If cell Is Nothing Then Continue For
+
+                    Dim baseStyle = cell.CellStyle
+                    Dim styleKey As Integer = If(baseStyle Is Nothing, -1, CInt(baseStyle.Index))
+
+                    Dim st As ICellStyle = Nothing
+                    If Not cache.TryGetValue(styleKey, st) Then
+                        st = wb.CreateCellStyle()
+                        If baseStyle IsNot Nothing Then st.CloneStyleFrom(baseStyle)
+                        st.FillForegroundColor = IndexedColors.Grey25Percent.Index
+                        st.FillPattern = FillPattern.SolidForeground
+                        cache(styleKey) = st
+                    End If
+
+                    cell.CellStyle = st
+                Next
+            Next
+        End Sub
+
         Public Sub SaveCsv(filePath As String, table As DataTable)
             If String.IsNullOrWhiteSpace(filePath) Then Throw New ArgumentNullException(NameOf(filePath))
             If table Is Nothing Then Throw New ArgumentNullException(NameOf(table))

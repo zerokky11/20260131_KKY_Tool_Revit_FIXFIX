@@ -1,36 +1,44 @@
-﻿<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop" ToolsVersion="Current">
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
 	<PropertyGroup>
 		<TargetFramework>net8.0-windows</TargetFramework>
 		<UseWPF>true</UseWPF>
 		<UseWindowsForms>true</UseWindowsForms>
+
 		<RootNamespace>KKY_Tool_Revit</RootNamespace>
-		<AssemblyName>KKY_Tool_Revit_2025</AssemblyName>
-		<!-- 상위 bin\Rvt2025 아래에 DLL 출력 -->
-		<OutputPath>bin\Rvt2025\</OutputPath>
+		<!-- ✅ DLL 이름 통일: KKY_Tool_Revit.dll -->
+		<AssemblyName>KKY_Tool_Revit</AssemblyName>
+
+		<!-- ✅ 산출물 위치: 2019-2023 프로젝트 bin 아래로 통일 -->
+		<OutputPath>..\KKY_Tool_Revit_2019-2023\bin\Rvt2025\net8.0-windows\</OutputPath>
 		<AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+
 		<GenerateAssemblyInfo>false</GenerateAssemblyInfo>
 		<OptionStrict>Off</OptionStrict>
 		<OptionInfer>On</OptionInfer>
 		<ImplicitUsings>disable</ImplicitUsings>
 		<Deterministic>false</Deterministic>
+
 		<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+
+		<!-- 기본 포함 제거 (링크 Compile을 수동 관리) -->
 		<EnableDefaultItems>false</EnableDefaultItems>
 		<EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+
 		<Platforms>AnyCPU;x64</Platforms>
-		<DefineConstants>REVIT2025=1</DefineConstants>
-		<SupportedOSPlatformVersion>7.0</SupportedOSPlatformVersion>
 		<PlatformTarget>x64</PlatformTarget>
 		<Prefer32Bit>false</Prefer32Bit>
-		<NoWarn>$(NoWarn);CA1416</NoWarn>
-		<FileUpgradeFlags>40</FileUpgradeFlags>
-		<UpgradeBackupLocation>C:\Users\manager\Desktop\KKY_Tool_Revit\KKY_Tool_Revit_2019-2023\Backup2\</UpgradeBackupLocation>
-		<OldToolsVersion>Current</OldToolsVersion>
+
+		<DefineConstants>REVIT2025=1</DefineConstants>
+		<SupportedOSPlatformVersion>7.0</SupportedOSPlatformVersion>
+
+		<!-- 경고 최소화 (요청): Revit 2024+ ElementId deprecations 등 -->
+		<NoWarn>$(NoWarn);CA1416;BC40000</NoWarn>
 	</PropertyGroup>
 
 	<!-- ProgramData / Addins 루트 계산 -->
 	<PropertyGroup>
-		<ProgramDataPath>$([System.Environment]::GetEnvironmentVariable('ProgramData'))</ProgramDataPath>
-		<ProgramDataPath Condition="'$(ProgramDataPath)'==''">C:\ProgramData</ProgramDataPath>
+		<ProgramDataPath>$([System.Environment]::GetFolderPath(SpecialFolder.CommonApplicationData))</ProgramDataPath>
 		<AddinRoot>$(ProgramDataPath)\Autodesk\Revit\Addins</AddinRoot>
 		<AddinYear>2025</AddinYear>
 	</PropertyGroup>
@@ -113,7 +121,6 @@
 		<Compile Include="..\KKY_Tool_Revit_2019-2023\Infrastructure\ExcelCore.vb">
 			<Link>Infrastructure\ExcelCore.vb</Link>
 		</Compile>
-		<!-- ✅ 누락 링크 추가 -->
 		<Compile Include="..\KKY_Tool_Revit_2019-2023\Infrastructure\ExcelStyleHelper.vb">
 			<Link>Infrastructure\ExcelStyleHelper.vb</Link>
 		</Compile>
@@ -209,30 +216,19 @@
 		<None Include="My Project\Application.myapp" />
 	</ItemGroup>
 
-	<!-- 빌드 후 addin 자동 생성 + HubUI 리소스도 Addins 폴더로 복사 -->
+	<!-- ✅ 빌드 후: ProgramData Addins\2025\KKY_Tool_Revit.addin 생성 (Assembly는 빌드 산출물의 절대경로) -->
 	<Target Name="CreateAddin" AfterTargets="Build">
 		<PropertyGroup>
-			<AddinOutDir>$(AddinRoot)\$(AddinYear)\KKY_Tool_Revit</AddinOutDir>
-			<BuiltDll>$([System.IO.Path]::GetFullPath('$(OutputPath)$(AssemblyName).dll'))</BuiltDll>
-			<AddinFile>$(AddinRoot)\$(AddinYear)\KKY_Tool_Revit.addin</AddinFile>
+			<BuiltDll>$(TargetPath)</BuiltDll>
+			<AddinOutDir>$(AddinRoot)\$(AddinYear)\</AddinOutDir>
+			<AddinFile>$(AddinOutDir)KKY_Tool_Revit.addin</AddinFile>
 		</PropertyGroup>
 
-		<Message Text="AddinOutDir=$(AddinOutDir)" Importance="high" />
-		<Message Text="BuiltDll=$(BuiltDll)" Importance="high" />
 		<MakeDir Directories="$(AddinOutDir)" />
 
-		<!-- ✅ OutputPath에 HubUI가 실제로 생겼는지 체크 -->
+		<!-- OutputPath에 HubUI가 실제로 생겼는지 체크 -->
 		<Error Condition="!Exists('$(OutputPath)Resources\HubUI\index.html')"
 			   Text="HubUI not found in output: $(OutputPath)Resources\HubUI\index.html (check Resources\HubUI content include)" />
-
-		<!-- ✅ Addins\2025\KKY_Tool_Revit 아래에도 Resources\HubUI를 같이 배포 -->
-		<ItemGroup>
-			<HubUiOutFiles Include="$(OutputPath)Resources\HubUI\**\*" />
-		</ItemGroup>
-		<MakeDir Directories="@(HubUiOutFiles->'$(AddinOutDir)\Resources\HubUI\%(RecursiveDir)')" />
-		<Copy SourceFiles="@(HubUiOutFiles)"
-			  DestinationFiles="@(HubUiOutFiles->'$(AddinOutDir)\Resources\HubUI\%(RecursiveDir)%(Filename)%(Extension)')"
-			  SkipUnchangedFiles="true" />
 
 		<ItemGroup>
 			<AddinXml Include="&lt;?xml version=&quot;1.0&quot; encoding=&quot;utf-8&quot; standalone=&quot;no&quot;?&gt;" />
@@ -248,7 +244,8 @@
 			<AddinXml Include="&lt;/RevitAddIns&gt;" />
 		</ItemGroup>
 
-		<WriteLinesToFile File="$(AddinFile)" Lines="@(AddinXml)" Overwrite="true" />
-		<Message Text="Created: $(AddinFile)" Importance="high" />
+		<WriteLinesToFile File="$(AddinFile)" Lines="@(AddinXml)" Overwrite="true" Encoding="UTF-8" />
+		<Message Text="Created: $(AddinFile) -> $(BuiltDll)" Importance="high" />
 	</Target>
+
 </Project>
