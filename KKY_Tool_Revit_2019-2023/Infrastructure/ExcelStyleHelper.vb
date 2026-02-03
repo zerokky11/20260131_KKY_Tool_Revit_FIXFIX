@@ -35,11 +35,12 @@ Namespace Infrastructure
             Dim header = wb.CreateCellStyle()
             Dim hf = wb.CreateFont()
             hf.IsBold = True
+            hf.Color = IndexedColors.White.Index
             header.SetFont(hf)
             header.Alignment = HorizontalAlignment.Center
             header.VerticalAlignment = VerticalAlignment.Center
             header.WrapText = True
-            header.FillForegroundColor = IndexedColors.Grey25Percent.Index
+            header.FillForegroundColor = IndexedColors.Grey50Percent.Index
             header.FillPattern = FillPattern.SolidForeground
             header.BorderBottom = BorderStyle.Thin
             header.BorderTop = BorderStyle.Thin

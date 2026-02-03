@@ -132,6 +132,8 @@ Namespace Infrastructure
         Private Function LooksError(s As String) As Boolean
             If String.IsNullOrWhiteSpace(s) Then Return False
             Dim t = s.Trim().ToLowerInvariant()
+            ' Connector: mismatch는 오류(강조)로 처리
+            If t.Contains("mismatch") OrElse t.Contains("불일치") Then Return True
             If t.Contains("error") OrElse t.Contains("fail") Then Return True
             If t.Contains("실패") OrElse t.Contains("오류") Then Return True
             Return False

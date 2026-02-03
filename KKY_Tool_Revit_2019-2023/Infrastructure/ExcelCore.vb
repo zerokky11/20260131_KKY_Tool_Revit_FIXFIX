@@ -54,16 +54,29 @@ Namespace Infrastructure
 
             EnsureDir(filePath)
 
-            Using wb As IWorkbook = New XSSFWorkbook()
-                Dim safeSheet = NormalizeSheetName(If(sheetName, "Sheet1"))
-                Dim sheet = wb.CreateSheet(safeSheet)
+            ' 진행률(웹 UI) 채널이 있으면 초기화 후 단계별로 보고
+            TryResetExcelProgress(progressKey)
+            TryReportExcelProgress(progressKey, "EXCEL_INIT", "엑셀 준비 중…", 0, Math.Max(1, table.Rows.Count), force:=True)
 
-                WriteTableToSheet(wb, sheet, safeSheet, table, sheetKey, autoFit, progressKey)
+            Try
+                Using wb As IWorkbook = New XSSFWorkbook()
+                    Dim safeSheet = NormalizeSheetName(If(sheetName, "Sheet1"))
+                    Dim sheet = wb.CreateSheet(safeSheet)
 
-                Using fs As New FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None)
-                    wb.Write(fs)
+                    WriteTableToSheet(wb, sheet, safeSheet, table, sheetKey, autoFit, progressKey)
+
+                    ' 저장 단계
+                    TryReportExcelProgress(progressKey, "EXCEL_SAVE", "파일 저장 중…", 0, 1, force:=True)
+                    Using fs As New FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None)
+                        wb.Write(fs)
+                    End Using
                 End Using
-            End Using
+
+                TryReportExcelProgress(progressKey, "DONE", "완료", 1, 1, force:=True)
+            Catch ex As Exception
+                TryReportExcelProgress(progressKey, "ERROR", ex.Message, 0, 1, force:=True)
+                Throw
+            End Try
         End Sub
 
         Public Sub SaveXlsxMulti(filePath As String,
@@ -76,25 +89,43 @@ Namespace Infrastructure
 
             EnsureDir(filePath)
 
-            Using wb As IWorkbook = New XSSFWorkbook()
-                Dim usedNames As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
+            Dim grandTotal As Integer = 0
+            For Each kv In sheets
+                If kv.Value Is Nothing Then Continue For
+                grandTotal += kv.Value.Rows.Count
+            Next
+            If grandTotal <= 0 Then grandTotal = 1
 
-                For i As Integer = 0 To sheets.Count - 1
-                    Dim name = If(sheets(i).Key, $"Sheet{i + 1}")
-                    Dim table = sheets(i).Value
-                    If table Is Nothing Then Continue For
+            TryResetExcelProgress(progressKey)
+            TryReportExcelProgress(progressKey, "EXCEL_INIT", "엑셀 준비 중…", 0, grandTotal, force:=True)
 
-                    Dim safe = MakeUniqueSheetName(NormalizeSheetName(name), usedNames)
-                    usedNames.Add(safe)
+            Try
+                Using wb As IWorkbook = New XSSFWorkbook()
+                    Dim usedNames As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
 
-                    Dim sheet = wb.CreateSheet(safe)
-                    WriteTableToSheet(wb, sheet, safe, table, sheetKey:=name, autoFit:=autoFit, progressKey:=progressKey)
-                Next
+                    For i As Integer = 0 To sheets.Count - 1
+                        Dim name = If(sheets(i).Key, $"Sheet{i + 1}")
+                        Dim table = sheets(i).Value
+                        If table Is Nothing Then Continue For
 
-                Using fs As New FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None)
-                    wb.Write(fs)
+                        Dim safe = MakeUniqueSheetName(NormalizeSheetName(name), usedNames)
+                        usedNames.Add(safe)
+
+                        Dim sheet = wb.CreateSheet(safe)
+                        WriteTableToSheet(wb, sheet, safe, table, sheetKey:=name, autoFit:=autoFit, progressKey:=progressKey)
+                    Next
+
+                    TryReportExcelProgress(progressKey, "EXCEL_SAVE", "파일 저장 중…", 0, 1, force:=True)
+                    Using fs As New FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None)
+                        wb.Write(fs)
+                    End Using
                 End Using
-            End Using
+
+                TryReportExcelProgress(progressKey, "DONE", "완료", 1, 1, force:=True)
+            Catch ex As Exception
+                TryReportExcelProgress(progressKey, "ERROR", ex.Message, 0, 1, force:=True)
+                Throw
+            End Try
         End Sub
 
 
@@ -110,29 +141,40 @@ Namespace Infrastructure
 
             EnsureDir(filePath)
 
-            Using wb As IWorkbook = New XSSFWorkbook()
-                Dim baseName As String = If(String.IsNullOrWhiteSpace(title),
-                                            If(String.IsNullOrWhiteSpace(table.TableName), "Sheet1", table.TableName),
-                                            title)
+            TryResetExcelProgress(progressKey)
+            TryReportExcelProgress(progressKey, "EXCEL_INIT", "엑셀 준비 중...", 0, Math.Max(1, table.Rows.Count), force:=True)
 
-                Dim safeSheet = NormalizeSheetName(baseName)
-                Dim sh = wb.CreateSheet(safeSheet)
+            Try
+                Using wb As IWorkbook = New XSSFWorkbook()
+                    Dim baseName As String = If(String.IsNullOrWhiteSpace(title),
+                                                If(String.IsNullOrWhiteSpace(table.TableName), "Sheet1", table.TableName),
+                                                title)
 
-                ' 1) 값 쓰기 (AutoFit은 스타일 적용 후 마지막에)
-                WriteTableToSheet(wb, sh, safeSheet, table, sheetKey:=title, autoFit:=False, progressKey:=progressKey)
+                    Dim safeSheet = NormalizeSheetName(baseName)
+                    Dim sh = wb.CreateSheet(safeSheet)
 
-                ' 2) 그룹 밴딩 (DuplicateExport: "Group" 컬럼)
-                If Not String.IsNullOrWhiteSpace(groupHeader) Then
-                    TryApplyGroupBanding(wb, sh, table, groupHeader)
-                End If
+                    ' 1) 값 쓰기 (AutoFit은 스타일 적용 후 마지막에)
+                    WriteTableToSheet(wb, sh, safeSheet, table, sheetKey:=title, autoFit:=False, progressKey:=progressKey)
 
-                ' 3) 기본 시트 스타일 (Freeze/Filter/Border/AutoFit)
-                ApplyStandardSheetStyle(wb, sh, headerRowIndex:=0, autoFilter:=True, freezeTopRow:=True, borderAll:=True, autoFit:=autoFit)
+                    ' 2) 그룹 밴딩 (DuplicateExport: "Group" 컬럼)
+                    If Not String.IsNullOrWhiteSpace(groupHeader) Then
+                        TryApplyGroupBanding(wb, sh, table, groupHeader)
+                    End If
 
-                Using fs As New FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None)
-                    wb.Write(fs)
+                    ' 3) 기본 시트 스타일 (Freeze/Filter/Border/AutoFit)
+                    ApplyStandardSheetStyle(wb, sh, headerRowIndex:=0, autoFilter:=True, freezeTopRow:=True, borderAll:=True, autoFit:=autoFit)
+
+                    TryReportExcelProgress(progressKey, "EXCEL_SAVE", "파일 저장 중...", 0, 1, force:=True)
+                    Using fs As New FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None)
+                        wb.Write(fs)
+                    End Using
                 End Using
-            End Using
+
+                TryReportExcelProgress(progressKey, "DONE", "완료", 1, 1, force:=True)
+            Catch ex As Exception
+                TryReportExcelProgress(progressKey, "ERROR", ex.Message, 0, 1, force:=True)
+                Throw
+            End Try
         End Sub
 
         Private Sub TryApplyGroupBanding(wb As IWorkbook, sh As ISheet, table As DataTable, groupHeader As String)
@@ -259,19 +301,42 @@ Namespace Infrastructure
                     ExcelStyleHelper.ApplyStyleToRow(row, colCount, style)
                 End If
 
-                If (r Mod 200) = 0 Then
-                    TryReportProgress(progressKey, r, total, sheetName)
+                If (r Mod 100) = 0 Then
+                    TryReportExcelProgress(progressKey, "EXCEL_WRITE", $"엑셀 작성 중... ({sheetName})", r + 1, Math.Max(1, total))
                 End If
             Next
 
+            ' 마지막 스냅샷
+            If total > 0 Then
+                TryReportExcelProgress(progressKey, "EXCEL_WRITE", $"엑셀 작성 중... ({sheetName})", total, total, force:=True)
+            End If
+
+            ' 헤더 기반 AutoFilter (0행 = 헤더)
+            Try
+                Dim lastRow As Integer = Math.Max(0, sheet.LastRowNum)
+                Dim lastCol As Integer = Math.Max(0, colCount - 1)
+                Dim range As New CellRangeAddress(0, lastRow, 0, lastCol)
+                TrySetAutoFilter(sheet, range)
+            Catch
+            End Try
+
             If autoFit Then
+                Dim fitTotal As Integer = Math.Max(1, colCount)
+                TryReportExcelProgress(progressKey, "AUTOFIT", "열 너비 계산 중...", 0, fitTotal, force:=True)
+
                 TryTrackAllColumnsForAutoSizing(sheet)
                 For c As Integer = 0 To colCount - 1
                     Try
                         sheet.AutoSizeColumn(c)
                     Catch
                     End Try
+
+                    If (c Mod 5) = 0 Then
+                        TryReportExcelProgress(progressKey, "AUTOFIT", "열 너비 계산 중...", c + 1, fitTotal)
+                    End If
                 Next
+
+                TryReportExcelProgress(progressKey, "AUTOFIT", "열 너비 계산 완료", fitTotal, fitTotal, force:=True)
             End If
         End Sub
 
@@ -554,9 +619,11 @@ Namespace Infrastructure
             Next
         End Sub
 
-        Public Sub TryAutoFitWithExcel(xlsxPath As String)
+        Public Sub TryAutoFitWithExcel(xlsxPath As String, Optional progressKey As String = Nothing)
             If String.IsNullOrWhiteSpace(xlsxPath) Then Return
             If Not File.Exists(xlsxPath) Then Return
+
+            TryReportExcelProgress(progressKey, "AUTOFIT", "AutoFit(Excel) 중...", 0, 1, force:=True)
 
             Dim excelApp As Object = Nothing
             Dim wbs As Object = Nothing
@@ -610,6 +677,8 @@ Namespace Infrastructure
                 ReleaseCom(wbs)
                 ReleaseCom(excelApp)
             End Try
+
+            TryReportExcelProgress(progressKey, "AUTOFIT", "AutoFit(Excel) 완료", 1, 1, force:=True)
         End Sub
 
         Private Sub ReleaseCom(o As Object)
@@ -712,9 +781,29 @@ Namespace Infrastructure
             Return 1
         End Function
 
-        ' progressKey는 UiBridge에서 "hub:multi-progress" 같은 채널로 쓰는 구조가 있어서
-        ' 여기서는 있으면 최대한 조용히 반영(리플렉션)하고, 없어도 기능은 정상 동작하게 처리
-        Private Sub TryReportProgress(progressKey As String, current As Integer, total As Integer, sheetName As String)
+        ' 진행률(웹 UI): ExcelProgressReporter가 존재하면 리플렉션으로 호출
+        ' - 채널(progressKey) 예: "connector:progress"
+        ' - phase: EXCEL_INIT / EXCEL_WRITE / EXCEL_SAVE / AUTOFIT / DONE / ERROR
+        Private Sub TryResetExcelProgress(progressKey As String)
+            If String.IsNullOrWhiteSpace(progressKey) Then Return
+            Try
+                Dim t = Type.GetType("KKY_Tool_Revit.UI.Hub.ExcelProgressReporter, " & GetType(ExcelCore).Assembly.FullName, throwOnError:=False)
+                If t Is Nothing Then Return
+
+                Dim mi = t.GetMethod("Reset", System.Reflection.BindingFlags.Public Or System.Reflection.BindingFlags.Static)
+                If mi Is Nothing Then Return
+                mi.Invoke(Nothing, New Object() {progressKey})
+            Catch
+            End Try
+        End Sub
+
+        Private Sub TryReportExcelProgress(progressKey As String,
+                                           phase As String,
+                                           message As String,
+                                           current As Integer,
+                                           total As Integer,
+                                           Optional force As Boolean = False)
+
             If String.IsNullOrWhiteSpace(progressKey) Then Return
             Try
                 Dim t = Type.GetType("KKY_Tool_Revit.UI.Hub.ExcelProgressReporter, " & GetType(ExcelCore).Assembly.FullName, throwOnError:=False)
@@ -723,9 +812,8 @@ Namespace Infrastructure
                 Dim mi = t.GetMethod("Report", System.Reflection.BindingFlags.Public Or System.Reflection.BindingFlags.Static)
                 If mi Is Nothing Then Return
 
-                Dim percent As Double = 0
-                If total > 0 Then percent = (CDbl(current) / CDbl(total)) * 100.0R
-                mi.Invoke(Nothing, New Object() {progressKey, percent, $"Exporting {sheetName}...", $"{current}/{total}"})
+                ' Report(channel, phase, message, current, total, percentOverride As Double?, force As Boolean)
+                mi.Invoke(Nothing, New Object() {progressKey, phase, message, current, total, Nothing, force})
             Catch
             End Try
         End Sub
