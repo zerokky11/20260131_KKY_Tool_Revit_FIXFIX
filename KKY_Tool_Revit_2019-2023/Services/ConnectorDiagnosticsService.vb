@@ -287,7 +287,13 @@ Namespace Services
 
                             If String.IsNullOrEmpty(connType) Then connType = "연결 대상 객체 없음"
 
-                            Dim distInch As Double = Math.Round(distFt * 12.0, 2)
+                            ' NOTE:
+                            ' - 연결 대상 객체 없음(found=None) 인 경우, 거리값을 0으로 넣으면 오해(=0인데도 대상 없음)가 발생.
+                            '   그래서 거리 컬럼은 "빈 값"으로 남기기 위해 NaN을 사용하고, BuildRow에서 빈 문자열로 출력한다.
+                            Dim distInch As Double = Double.NaN
+                            If found IsNot Nothing Then
+                                distInch = Math.Round(distFt * 12.0, 2)
+                            End If
 
                             Dim info1 = GetParamInfo(el, param)
                             Dim info2 As ParamInfo = If(found IsNot Nothing,
@@ -519,7 +525,7 @@ Namespace Services
                 {"Category2", cat2},
                 {"Family1", fam1},
                 {"Family2", fam2},
-                {"Distance (inch)", distInch},
+                {"Distance (inch)", If(Double.IsNaN(distInch), CType("", Object), CType(distInch, Object))},
                 {"ConnectionType", connType},
                 {"ParamName", param},
                 {"Value1", v1},
@@ -1216,7 +1222,8 @@ Namespace Services
 
             If excludeEndDummy Then
                 Dim fam As String = GetFamilyName(el)
-                If fam.IndexOf("End_", StringComparison.OrdinalIgnoreCase) >= 0 AndAlso fam.IndexOf("Dummy", StringComparison.OrdinalIgnoreCase) >= 0 Then
+                ' End_ 또는 Dummy 중 하나라도 포함되면 제외
+                If fam.IndexOf("End_", StringComparison.OrdinalIgnoreCase) >= 0 OrElse fam.IndexOf("Dummy", StringComparison.OrdinalIgnoreCase) >= 0 Then
                     Return False
                 End If
             End If

@@ -33,6 +33,10 @@ Namespace UI.Hub
         Private _connectorTargetFilter As String = String.Empty
         Private _connectorExcludeEndDummy As Boolean = False
 
+        ' 마지막 실행 시 UI 단위(엑셀 헤더/거리 변환에 사용)
+        ' - SaveExcel payload 에 unit 이 누락되는 케이스가 있어도, 직전 실행 설정으로 내보내기 일관성 유지
+        Private _connectorUiUnit As String = "inch"
+
         ' 디버그 로그를 웹(F12 콘솔)로 보내는 헬퍼
         Private Sub LogDebug(message As String)
             Try
@@ -134,6 +138,9 @@ Namespace UI.Hub
                     _connectorExcludeEndDummy = False
                 End Try
                 LogDebug($"[connector] 파라미터 파싱 완료 (tol={tol}, unit={unit}, param={param}, extra={String.Join(",", _connectorExtraParams)} )")
+
+                ' 직전 실행 단위 저장(엑셀 내보내기에서 기본값으로 사용)
+                _connectorUiUnit = NormalizeUiUnit(unit)
 
                 ' === 단위 변환 → feet ===
                 Dim tolFt As Double = 0.0
@@ -280,47 +287,46 @@ Namespace UI.Hub
                     Return
                 End If
 
-                ' --- Export scope/options (UI 설정 반영) ---
-                Dim exportTab As String = ""
+                ' UI 단위는 connector:save-excel payload 에 포함되는게 이상적이지만,
+                ' 누락되는 케이스가 있어 직전 실행값(_connectorUiUnit)을 기본으로 사용.
+                Dim uiUnitRaw As String = ""
                 Try
-                    exportTab = TryCast(GetProp(payload, "tab"), String)
+                    uiUnitRaw = TryCast(GetProp(payload, "uiUnit"), String)
                 Catch
-                    exportTab = ""
+                    uiUnitRaw = ""
                 End Try
-                exportTab = If(exportTab, "").Trim().ToLowerInvariant()
-
-                Dim uiUnit As String = ""
-                Try
-                    uiUnit = TryCast(GetProp(payload, "uiUnit"), String)
-                Catch
-                    uiUnit = ""
-                End Try
-                If String.IsNullOrWhiteSpace(uiUnit) Then
+                If String.IsNullOrWhiteSpace(uiUnitRaw) Then
                     Try
-                        uiUnit = TryCast(GetProp(payload, "displayUnit"), String)
+                        uiUnitRaw = TryCast(GetProp(payload, "displayUnit"), String)
                     Catch
-                        uiUnit = ""
+                        uiUnitRaw = ""
                     End Try
                 End If
-                uiUnit = If(uiUnit, "inch").Trim().ToLowerInvariant()
-                If uiUnit = "millimeter" Then uiUnit = "mm"
-                If uiUnit <> "mm" Then uiUnit = "inch"
-
-                Dim exportRows As List(Of Dictionary(Of String, Object)) = filteredTotal
-                If exportTab = "mismatch" Then
-                    exportRows = filteredTotal.Where(Function(r)
-                                                         Dim st = ReadField(r, "Status")
-                                                         Return IsMismatchRow(r) OrElse String.Equals(st, "ERROR", StringComparison.OrdinalIgnoreCase)
-                                                     End Function).ToList()
-                ElseIf exportTab = "not-connected" OrElse exportTab = "notconnected" OrElse exportTab = "not_connected" Then
-                    exportRows = filteredTotal.Where(Function(r)
-                                                         Dim st = ReadField(r, "Status")
-                                                         Return IsNearConnection(r) OrElse String.Equals(st, "ERROR", StringComparison.OrdinalIgnoreCase)
-                                                     End Function).ToList()
+                If String.IsNullOrWhiteSpace(uiUnitRaw) Then
+                    Try
+                        uiUnitRaw = TryCast(GetProp(payload, "unit"), String)
+                    Catch
+                        uiUnitRaw = ""
+                    End Try
                 End If
+                If String.IsNullOrWhiteSpace(uiUnitRaw) Then
+                    uiUnitRaw = _connectorUiUnit
+                End If
+                Dim uiUnit As String = NormalizeUiUnit(uiUnitRaw)
+
+                ' ✅ 납품 기준(BQC): UI의 선택/탭과 상관없이 아래 항목만 내보낸다.
+                ' 1) 파라미터 불일치(Mismatch) / Shared Parameter 등록 필요
+                ' 2) 대상과 거리가 0인데 미연결(Proximity + Distance=0)
+                ' 3) ERROR
+                Dim exportRows As List(Of Dictionary(Of String, Object)) = filteredTotal.Where(Function(r)
+                                                                                                   Dim st = ReadField(r, "Status")
+                                                                                                   If String.Equals(st, "ERROR", StringComparison.OrdinalIgnoreCase) Then Return True
+                                                                                                   If IsMismatchRow(r) Then Return True
+                                                                                                   Return IsZeroDistanceNotConnected(r)
+                                                                                               End Function).ToList()
 
                 If exportRows Is Nothing OrElse exportRows.Count = 0 Then
-                    System.Windows.Forms.MessageBox.Show("해당 탭에 내보낼 항목이 없습니다.", "검토 결과", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                    System.Windows.Forms.MessageBox.Show("내보낼 항목이 없습니다.", "검토 결과", MessageBoxButtons.OK, MessageBoxIcon.Information)
                     Return
                 End If
 
@@ -442,6 +448,12 @@ Namespace UI.Hub
             Return result
         End Function
 
+        Private Shared Function NormalizeUiUnit(raw As String) As String
+            Dim u As String = If(raw, "").Trim().ToLowerInvariant()
+            If u = "mm" OrElse u = "millimeter" OrElse u = "millimeters" Then Return "mm"
+            Return "inch"
+        End Function
+
         Private Shared Function IsNearConnection(r As Dictionary(Of String, Object)) As Boolean
             Dim conn As String = ReadField(r, "ConnectionType")
             If String.IsNullOrEmpty(conn) Then conn = ReadField(r, "Connection Type")
@@ -451,6 +463,61 @@ Namespace UI.Hub
             If String.Equals(status, "연결 대상 객체 없음", StringComparison.OrdinalIgnoreCase) Then Return True
             If String.Equals(status, "연결 필요(Proximity)", StringComparison.OrdinalIgnoreCase) Then Return True
             Return False
+        End Function
+
+        ' Distance=0 이면서 Physical(연결됨)이 아닌 Proximity 케이스만 True
+        ' - 서비스에서 "연결 대상 객체 없음"은 Distance 빈값으로 내려오도록 보정되어 있어, 여기서 0은 '실제로 대상이 있는' 0을 의미한다.
+        Private Shared Function IsZeroDistanceNotConnected(row As Dictionary(Of String, Object)) As Boolean
+            If row Is Nothing Then Return False
+
+            Dim st As String = ReadField(row, "Status")
+            Dim conn As String = ReadField(row, "ConnectionType")
+            If String.IsNullOrEmpty(conn) Then conn = ReadField(row, "Connection Type")
+
+            ' Proximity/미연결이 아닌 경우 제외
+            If Not (String.Equals(st, "연결 필요(Proximity)", StringComparison.OrdinalIgnoreCase) OrElse
+                    conn.IndexOf("Proximity", StringComparison.OrdinalIgnoreCase) >= 0) Then
+                Return False
+            End If
+
+            ' Physical(연결 됨) 제외
+            If conn.IndexOf("Physical", StringComparison.OrdinalIgnoreCase) >= 0 Then
+                Return False
+            End If
+
+            ' 대상(Id2) 없는 행 제외
+            Dim id2Raw As String = ReadField(row, "Id2")
+            If String.IsNullOrWhiteSpace(id2Raw) Then Return False
+            Dim id2 = id2Raw.Trim()
+            If id2.StartsWith(",", StringComparison.Ordinal) Then id2 = id2.Substring(1).Trim()
+            If String.IsNullOrWhiteSpace(id2) OrElse id2 = "0" Then Return False
+
+            ' 거리 0 판정 (inch 기준)
+            Dim distInch As Double = GetDistanceInch(row)
+            If Double.IsNaN(distInch) Then Return False
+            Return Math.Abs(distInch) < 0.0001R
+        End Function
+
+        Private Shared Function GetDistanceInch(row As Dictionary(Of String, Object)) As Double
+            If row Is Nothing Then Return Double.NaN
+
+            Dim v As Object = Nothing
+            If row.ContainsKey("Distance (inch)") Then v = row("Distance (inch)")
+            If v Is Nothing Then Return Double.NaN
+
+            Try
+                Return Convert.ToDouble(v)
+            Catch
+            End Try
+
+            Dim s As String = v.ToString()
+            If String.IsNullOrWhiteSpace(s) Then Return Double.NaN
+
+            Dim d As Double
+            If Double.TryParse(s, Globalization.NumberStyles.Any, Globalization.CultureInfo.InvariantCulture, d) Then Return d
+            If Double.TryParse(s, d) Then Return d
+
+            Return Double.NaN
         End Function
 
         Private Shared Function IsMismatchRow(r As Dictionary(Of String, Object)) As Boolean
@@ -587,6 +654,8 @@ Namespace UI.Hub
         ' 테두리/헤더/색상 스타일 헬퍼 (같은 워크북 내 공유)
         Private Shared Function CreateBorderedStyle(wb As XSSFWorkbook) As ICellStyle
             Dim st As ICellStyle = wb.CreateCellStyle()
+            ' 행 높이 자동 증가(82.5 등) 이슈 방지: WrapText를 명시적으로 끔
+            st.WrapText = False
             st.BorderTop = NPOI.SS.UserModel.BorderStyle.Thin
             st.BorderBottom = NPOI.SS.UserModel.BorderStyle.Thin
             st.BorderLeft = NPOI.SS.UserModel.BorderStyle.Thin
@@ -863,6 +932,7 @@ Namespace UI.Hub
             Dim sh = wb.CreateSheet(sheetName)
 
             Dim headerRow = sh.CreateRow(0)
+            headerRow.Height = -1
             For i = 0 To headers.Count - 1
                 Dim c = headerRow.CreateCell(i)
                 Dim headerText As String = headers(i)
@@ -876,7 +946,10 @@ Namespace UI.Hub
             sh.CreateFreezePane(0, 1)
 
             If headers.Count > 0 Then
-                Dim range As New NPOI.SS.Util.CellRangeAddress(0, 0, 0, headers.Count - 1)
+                ' AutoFilter 범위는 헤더 + 데이터 전체 범위로 지정
+                Dim lastRowIdx As Integer = 0
+                If rows IsNot Nothing Then lastRowIdx = Math.Max(0, rows.Count)
+                Dim range As New NPOI.SS.Util.CellRangeAddress(0, lastRowIdx, 0, headers.Count - 1)
                 sh.SetAutoFilter(range)
             End If
 
@@ -884,6 +957,7 @@ Namespace UI.Hub
                 Dim r As Integer = 1
                 For Each row In rows
                     Dim sr = sh.CreateRow(r) : r += 1
+                    sr.Height = -1
 
                     Dim statusVal As String = SafeCellString(row, "Status")
                     Dim connVal As String = SafeCellString(row, "ConnectionType")
