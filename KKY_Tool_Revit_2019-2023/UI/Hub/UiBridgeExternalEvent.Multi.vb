@@ -458,10 +458,31 @@ NextItem:
             Next
 
             Dim extras = If(_multiConnectorExtras, New List(Of String)())
-            Dim headers As List(Of String) = BuildConnectorHeaders(extras)
-            Dim table = BuildTableFromRows(headers, rows)
+            Dim rawUnit As String = Nothing
+            If _multiRequest IsNot Nothing AndAlso _multiRequest.Connector IsNot Nothing Then
+                rawUnit = _multiRequest.Connector.Unit
+            End If
+            If String.IsNullOrWhiteSpace(rawUnit) Then rawUnit = _lastConnectorUnit
+            Dim uiUnit As String = NormalizeUiUnit(rawUnit)
+
+            Dim excludeEndDummy As Boolean = _lastConnectorExcludeEndDummy
+            If _multiRequest IsNot Nothing AndAlso _multiRequest.Common IsNot Nothing Then
+                excludeEndDummy = _multiRequest.Common.ExcludeEndDummy
+            End If
+
+            Dim exportRows As List(Of Dictionary(Of String, Object)) = rows.Where(Function(r) ShouldExportIssueRow(r)).ToList()
+            If excludeEndDummy Then
+                exportRows = exportRows.Where(Function(r) Not ShouldExcludeEndDummyRow(r)).ToList()
+            End If
+            If exportRows.Count = 0 Then
+                SendToWeb("hub:multi-exported", New With {.ok = False, .message = "내보낼 커넥터 이슈가 없습니다."})
+                Return
+            End If
+
+            Dim headers As List(Of String) = BuildConnectorHeaders(extras, uiUnit)
+            Dim table = BuildConnectorTableFromRows(headers, exportRows)
             If Not ValidateSchema(table, headers) Then Throw New InvalidOperationException("스키마 검증 실패: 커넥터")
-            Dim saved = ExcelCore.PickAndSaveXlsx("Connector Diagnostics", table, $"Connector_{Date.Now:yyyyMMdd_HHmm}.xlsx", doAutoFit, "hub:multi-progress")
+            Dim saved = ExcelCore.PickAndSaveXlsx("Connector Diagnostics", table, $"Connector_{Date.Now:yyyyMMdd_HHmm}.xlsx", doAutoFit, "hub:multi-progress", "connector")
             If String.IsNullOrWhiteSpace(saved) Then
                 SendToWeb("hub:multi-exported", New With {.ok = False, .message = "엑셀 저장이 취소되었습니다."})
             Else
@@ -764,9 +785,14 @@ NextItem:
             Return opt
         End Function
 
-        Private Shared Function BuildConnectorHeaders(extras As IList(Of String)) As List(Of String)
+        Private Shared Function BuildConnectorHeaders(extras As IList(Of String), uiUnit As String) As List(Of String)
+            Dim distanceHeader As String = "Distance (inch)"
+            If String.Equals(uiUnit, "mm", StringComparison.OrdinalIgnoreCase) Then
+                distanceHeader = "Distance (mm)"
+            End If
+
             Dim headers As New List(Of String) From {
-                "File", "Id1", "Id2", "Category1", "Category2", "Family1", "Family2", "Distance (inch)", "ConnectionType", "ParamName", "Value1", "Value2", "ParamCompare", "Status", "ErrorMessage"
+                "File", "Id1", "Id2", "Category1", "Category2", "Family1", "Family2", distanceHeader, "ConnectionType", "ParamName", "Value1", "Value2", "ParamCompare", "Status", "ErrorMessage"
             }
             If extras IsNot Nothing Then
                 For Each name In extras
@@ -775,6 +801,44 @@ NextItem:
                 Next
             End If
             Return headers
+        End Function
+
+        Private Shared Function BuildConnectorTableFromRows(headers As IList(Of String), rows As IList(Of Dictionary(Of String, Object))) As DataTable
+            Dim dt As New DataTable("Export")
+            For Each h In headers
+                If String.Equals(h, "Distance (mm)", StringComparison.OrdinalIgnoreCase) OrElse String.Equals(h, "Distance (inch)", StringComparison.OrdinalIgnoreCase) Then
+                    dt.Columns.Add(h, GetType(Double))
+                Else
+                    dt.Columns.Add(h)
+                End If
+            Next
+            If rows Is Nothing Then Return dt
+
+            For Each r In rows
+                Dim dr = dt.NewRow()
+                For i As Integer = 0 To headers.Count - 1
+                    Dim key = headers(i)
+                    If String.Equals(key, "Distance (mm)", StringComparison.OrdinalIgnoreCase) Then
+                        Dim distInch As Double = GetDistanceInch(r)
+                        If Not Double.IsNaN(distInch) Then
+                            dr(i) = distInch * 25.4R
+                        Else
+                            dr(i) = DBNull.Value
+                        End If
+                    ElseIf String.Equals(key, "Distance (inch)", StringComparison.OrdinalIgnoreCase) Then
+                        Dim distInch As Double = GetDistanceInch(r)
+                        If Not Double.IsNaN(distInch) Then
+                            dr(i) = distInch
+                        Else
+                            dr(i) = DBNull.Value
+                        End If
+                    Else
+                        dr(i) = If(r IsNot Nothing AndAlso r.ContainsKey(key) AndAlso r(key) IsNot Nothing, r(key).ToString(), String.Empty)
+                    End If
+                Next
+                dt.Rows.Add(dr)
+            Next
+            Return dt
         End Function
 
         Private Sub AppendMultiConnectorError(fileName As String, message As String)

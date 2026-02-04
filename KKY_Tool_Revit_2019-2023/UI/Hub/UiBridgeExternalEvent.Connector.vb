@@ -36,6 +36,11 @@ Namespace UI.Hub
         ' 마지막 실행 시 UI 단위(엑셀 헤더/거리 변환에 사용)
         ' - SaveExcel payload 에 unit 이 누락되는 케이스가 있어도, 직전 실행 설정으로 내보내기 일관성 유지
         Private _connectorUiUnit As String = "inch"
+        Private _lastConnectorTol As Double = 1.0R
+        Private _lastConnectorUnit As String = "inch"
+        Private _lastConnectorParam As String = "Comments"
+        Private _lastConnectorTargetFilter As String = String.Empty
+        Private _lastConnectorExcludeEndDummy As Boolean = False
 
         ' 디버그 로그를 웹(F12 콘솔)로 보내는 헬퍼
         Private Sub LogDebug(message As String)
@@ -141,6 +146,11 @@ Namespace UI.Hub
 
                 ' 직전 실행 단위 저장(엑셀 내보내기에서 기본값으로 사용)
                 _connectorUiUnit = NormalizeUiUnit(unit)
+                _lastConnectorTol = tol
+                _lastConnectorUnit = unit
+                _lastConnectorParam = param
+                _lastConnectorTargetFilter = _connectorTargetFilter
+                _lastConnectorExcludeEndDummy = _connectorExcludeEndDummy
 
                 ' === 단위 변환 → feet ===
                 Dim tolFt As Double = 0.0
@@ -318,12 +328,10 @@ Namespace UI.Hub
                 ' 1) 파라미터 불일치(Mismatch) / Shared Parameter 등록 필요
                 ' 2) 대상과 거리가 0인데 미연결(Proximity + Distance=0)
                 ' 3) ERROR
-                Dim exportRows As List(Of Dictionary(Of String, Object)) = filteredTotal.Where(Function(r)
-                                                                                                   Dim st = ReadField(r, "Status")
-                                                                                                   If String.Equals(st, "ERROR", StringComparison.OrdinalIgnoreCase) Then Return True
-                                                                                                   If IsMismatchRow(r) Then Return True
-                                                                                                   Return IsZeroDistanceNotConnected(r)
-                                                                                               End Function).ToList()
+                Dim exportRows As List(Of Dictionary(Of String, Object)) = filteredTotal.Where(Function(r) ShouldExportIssueRow(r)).ToList()
+                If _connectorExcludeEndDummy Then
+                    exportRows = exportRows.Where(Function(r) Not ShouldExcludeEndDummyRow(r)).ToList()
+                End If
 
                 If exportRows Is Nothing OrElse exportRows.Count = 0 Then
                     System.Windows.Forms.MessageBox.Show("내보낼 항목이 없습니다.", "검토 결과", MessageBoxButtons.OK, MessageBoxIcon.Information)
@@ -496,6 +504,30 @@ Namespace UI.Hub
             Dim distInch As Double = GetDistanceInch(row)
             If Double.IsNaN(distInch) Then Return False
             Return Math.Abs(distInch) < 0.0001R
+        End Function
+
+        Private Shared Function ShouldExcludeEndDummyRow(row As Dictionary(Of String, Object)) As Boolean
+            If row Is Nothing Then Return False
+            Dim family1 As String = ReadFieldInsensitive(row, "Family1")
+            Dim family2 As String = ReadFieldInsensitive(row, "Family2")
+            Dim type1 As String = ReadFieldInsensitive(row, "Type1")
+            Dim type2 As String = ReadFieldInsensitive(row, "Type2")
+
+            Dim parts As String() = {family1, family2, type1, type2}
+            For Each part In parts
+                If String.IsNullOrWhiteSpace(part) Then Continue For
+                If part.IndexOf("End_", StringComparison.OrdinalIgnoreCase) >= 0 Then Return True
+                If part.IndexOf("Dummy", StringComparison.OrdinalIgnoreCase) >= 0 Then Return True
+            Next
+            Return False
+        End Function
+
+        Private Shared Function ShouldExportIssueRow(row As Dictionary(Of String, Object)) As Boolean
+            If row Is Nothing Then Return False
+            Dim st = ReadField(row, "Status")
+            If String.Equals(st, "ERROR", StringComparison.OrdinalIgnoreCase) Then Return True
+            If IsMismatchRow(row) Then Return True
+            Return IsZeroDistanceNotConnected(row)
         End Function
 
         Private Shared Function GetDistanceInch(row As Dictionary(Of String, Object)) As Double
