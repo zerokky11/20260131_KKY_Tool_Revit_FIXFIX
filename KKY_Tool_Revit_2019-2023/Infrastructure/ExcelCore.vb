@@ -17,14 +17,15 @@ Namespace Infrastructure
                                         table As DataTable,
                                         defaultFileName As String,
                                         Optional autoFit As Boolean = False,
-                                        Optional progressKey As String = Nothing) As String
+                                        Optional progressKey As String = Nothing,
+                                        Optional exportKind As String = Nothing) As String
 
             If table Is Nothing Then Throw New ArgumentNullException(NameOf(table))
 
             Dim path = PickSavePath("Excel Workbook (*.xlsx)|*.xlsx", defaultFileName, title)
             If String.IsNullOrWhiteSpace(path) Then Return ""
 
-            SaveXlsx(path, If(String.IsNullOrWhiteSpace(table.TableName), title, table.TableName), table, autoFit, sheetKey:=title, progressKey:=progressKey)
+            SaveXlsx(path, If(String.IsNullOrWhiteSpace(table.TableName), title, table.TableName), table, autoFit, sheetKey:=title, progressKey:=progressKey, exportKind:=exportKind)
             Return path
         End Function
 
@@ -47,7 +48,8 @@ Namespace Infrastructure
                             table As DataTable,
                             Optional autoFit As Boolean = False,
                             Optional sheetKey As String = Nothing,
-                            Optional progressKey As String = Nothing)
+                            Optional progressKey As String = Nothing,
+                            Optional exportKind As String = Nothing)
 
             If String.IsNullOrWhiteSpace(filePath) Then Throw New ArgumentNullException(NameOf(filePath))
             If table Is Nothing Then Throw New ArgumentNullException(NameOf(table))
@@ -58,7 +60,7 @@ Namespace Infrastructure
                 Dim safeSheet = NormalizeSheetName(If(sheetName, "Sheet1"))
                 Dim sheet = wb.CreateSheet(safeSheet)
 
-                WriteTableToSheet(wb, sheet, safeSheet, table, sheetKey, autoFit, progressKey)
+                WriteTableToSheet(wb, sheet, safeSheet, table, sheetKey, autoFit, progressKey, exportKind)
 
                 Using fs As New FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None)
                     wb.Write(fs)
@@ -88,7 +90,7 @@ Namespace Infrastructure
                     usedNames.Add(safe)
 
                     Dim sheet = wb.CreateSheet(safe)
-                    WriteTableToSheet(wb, sheet, safe, table, sheetKey:=name, autoFit:=autoFit, progressKey:=progressKey)
+                    WriteTableToSheet(wb, sheet, safe, table, sheetKey:=name, autoFit:=autoFit, progressKey:=progressKey, exportKind:=Nothing)
                 Next
 
                 Using fs As New FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None)
@@ -119,7 +121,7 @@ Namespace Infrastructure
                 Dim sh = wb.CreateSheet(safeSheet)
 
                 ' 1) 값 쓰기 (AutoFit은 스타일 적용 후 마지막에)
-                WriteTableToSheet(wb, sh, safeSheet, table, sheetKey:=title, autoFit:=False, progressKey:=progressKey)
+                WriteTableToSheet(wb, sh, safeSheet, table, sheetKey:=title, autoFit:=False, progressKey:=progressKey, exportKind:=Nothing)
 
                 ' 2) 그룹 밴딩 (DuplicateExport: "Group" 컬럼)
                 If Not String.IsNullOrWhiteSpace(groupHeader) Then
@@ -226,14 +228,19 @@ Namespace Infrastructure
                                       table As DataTable,
                                       sheetKey As String,
                                       autoFit As Boolean,
-                                      progressKey As String)
+                                      progressKey As String,
+                                      exportKind As String)
 
             Dim colCount As Integer = table.Columns.Count
             If colCount = 0 Then Return
 
             ' header
             Dim headerRow = sheet.CreateRow(0)
-            Dim headerStyle = ExcelStyleHelper.GetHeaderStyle(wb)
+            Dim isConnector As Boolean = String.Equals(exportKind, "connector", StringComparison.OrdinalIgnoreCase)
+            Dim headerStyle As ICellStyle = If(isConnector, ExcelStyleHelper.GetHeaderStyleNoWrap(wb), ExcelStyleHelper.GetHeaderStyle(wb))
+            If isConnector Then
+                headerRow.Height = -1
+            End If
 
             For c As Integer = 0 To colCount - 1
                 Dim cell = headerRow.CreateCell(c)
@@ -247,6 +254,9 @@ Namespace Infrastructure
             For r As Integer = 0 To total - 1
                 Dim dr = table.Rows(r)
                 Dim row = sheet.CreateRow(r + 1)
+                If isConnector Then
+                    row.Height = -1
+                End If
 
                 For c As Integer = 0 To colCount - 1
                     WriteCell(row, c, dr(c))
@@ -255,7 +265,7 @@ Namespace Infrastructure
                 ' ---- 핵심: 저장하면서 행 상태를 판정해서 배경색 적용 ----
                 Dim status = ExcelExportStyleRegistry.Resolve(If(sheetKey, sheetName), dr, table)
                 If status <> ExcelStyleHelper.RowStatus.None Then
-                    Dim style = ExcelStyleHelper.GetRowStyle(wb, status)
+                    Dim style = If(isConnector, ExcelStyleHelper.GetRowStyleNoWrap(wb, status), ExcelStyleHelper.GetRowStyle(wb, status))
                     ExcelStyleHelper.ApplyStyleToRow(row, colCount, style)
                 End If
 
@@ -263,6 +273,15 @@ Namespace Infrastructure
                     TryReportProgress(progressKey, r, total, sheetName)
                 End If
             Next
+
+            If isConnector AndAlso colCount > 0 Then
+                Try
+                    Dim lastRowIndex As Integer = Math.Max(0, total)
+                    Dim range As New CellRangeAddress(0, lastRowIndex, 0, colCount - 1)
+                    sheet.SetAutoFilter(range)
+                Catch
+                End Try
+            End If
 
             If autoFit Then
                 TryTrackAllColumnsForAutoSizing(sheet)
