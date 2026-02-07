@@ -328,7 +328,7 @@ Namespace UI.Hub
 
         ' ====== 엑셀 내보내기 ======
         Private Sub HandleDuplicateExport(app As UIApplication, Optional payload As Object = Nothing)
-            If _lastRows Is Nothing OrElse _lastRows.Count = 0 Then
+            If _lastRows Is Nothing Then
                 SendToWeb("host:warn", New With {.message = "내보낼 데이터가 없습니다."})
                 Return
             End If

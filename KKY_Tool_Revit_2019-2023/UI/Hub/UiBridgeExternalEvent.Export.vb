@@ -204,6 +204,11 @@ Namespace UI.Hub
             If total = 0 Then
                 ReportExportProgress("EXCEL", "엑셀 데이터 구성", 0, 0, 0.0, False)
             End If
+            If dt.Rows.Count = 0 Then
+                Dim dr = dt.NewRow()
+                dr(0) = "오류가 없습니다."
+                dt.Rows.Add(dr)
+            End If
             Return dt
         End Function
 

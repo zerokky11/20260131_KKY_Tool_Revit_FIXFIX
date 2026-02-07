@@ -201,8 +201,9 @@ Namespace Services
 
             If exportTable.Rows.Count = 0 Then
                 Dim row = exportTable.NewRow()
-                If exportTable.Columns.Contains("Result") Then row("Result") = "NO_DATA"
-                If exportTable.Columns.Contains("Notes") Then row("Notes") = "결과가 없습니다."
+                If exportTable.Columns.Count > 0 Then
+                    row(0) = "오류가 없습니다."
+                End If
                 exportTable.Rows.Add(row)
             End If
 

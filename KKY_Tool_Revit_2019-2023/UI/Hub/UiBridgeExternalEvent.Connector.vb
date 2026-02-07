@@ -285,7 +285,7 @@ Namespace UI.Hub
                 If rows Is Nothing OrElse rows.Count = 0 Then rows = TryGetRowsFromPayload(payload)
                 If rows Is Nothing OrElse rows.Count = 0 Then rows = lastConnRows
 
-                If rows Is Nothing OrElse rows.Count = 0 Then
+                If rows Is Nothing Then
                     SendToWeb("revit:error", New With {.message = "저장할 데이터가 없습니다."})
                     Return
                 End If
@@ -294,7 +294,6 @@ Namespace UI.Hub
 
                 If filteredTotal Is Nothing OrElse filteredTotal.Count = 0 Then
                     System.Windows.Forms.MessageBox.Show("이슈 항목이 없습니다.", "검토 결과", MessageBoxButtons.OK, MessageBoxIcon.Information)
-                    Return
                 End If
 
                 ' UI 단위는 connector:save-excel payload 에 포함되는게 이상적이지만,
@@ -335,10 +334,13 @@ Namespace UI.Hub
 
                 If exportRows Is Nothing OrElse exportRows.Count = 0 Then
                     System.Windows.Forms.MessageBox.Show("내보낼 항목이 없습니다.", "검토 결과", MessageBoxButtons.OK, MessageBoxIcon.Information)
-                    Return
                 End If
 
                 Dim mismatchCount As Integer = CountMismatches(exportRows)
+                If exportRows Is Nothing OrElse exportRows.Count = 0 Then
+                    exportRows = BuildEmptyConnectorRows()
+                    mismatchCount = 0
+                End If
 
                 Dim doAutoFit As Boolean = ParseExcelMode(payload)
                 Global.KKY_Tool_Revit.UI.Hub.ExcelProgressReporter.Reset("connector:progress")
@@ -593,6 +595,12 @@ Namespace UI.Hub
             If IsParamCompareMatch(row) Then Return False
             Dim status As String = ReadField(row, "Status")
             Return IsIssueStatus(status)
+        End Function
+
+        Private Shared Function BuildEmptyConnectorRows() As List(Of Dictionary(Of String, Object))
+            Dim row As New Dictionary(Of String, Object)(StringComparer.Ordinal)
+            row("Id1") = "오류가 없습니다."
+            Return New List(Of Dictionary(Of String, Object)) From {row}
         End Function
 
         Private Shared Function ShouldIncludeRow(r As Dictionary(Of String, Object)) As Boolean

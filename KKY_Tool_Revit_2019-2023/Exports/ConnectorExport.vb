@@ -7,6 +7,7 @@ Namespace Exports
 
         Public Function SaveWithDialog(resultTable As DataTable) As String
             If resultTable Is Nothing Then Return String.Empty
+            EnsureMessageRow(resultTable)
 
             Dim outPath As String = Global.KKY_Tool_Revit.Infrastructure.ExcelCore.PickAndSaveXlsx(
                 "Connector Diagnostics",
@@ -27,6 +28,7 @@ Namespace Exports
         Public Sub Save(outPath As String, resultTable As DataTable)
             If String.IsNullOrWhiteSpace(outPath) Then Exit Sub
             If resultTable Is Nothing Then Exit Sub
+            EnsureMessageRow(resultTable)
 
             Global.KKY_Tool_Revit.Infrastructure.ExcelCore.SaveXlsx(outPath, "Connector Diagnostics", resultTable)
 
@@ -34,6 +36,15 @@ Namespace Exports
                 Global.KKY_Tool_Revit.Infrastructure.ExcelExportStyleRegistry.ApplyStylesForKey("connector", outPath)
             Catch
             End Try
+        End Sub
+
+        Private Sub EnsureMessageRow(table As DataTable)
+            If table Is Nothing Then Return
+            If table.Rows.Count > 0 Then Return
+            If table.Columns.Count = 0 Then Return
+            Dim dr = table.NewRow()
+            dr(0) = "오류가 없습니다."
+            table.Rows.Add(dr)
         End Sub
 
     End Module

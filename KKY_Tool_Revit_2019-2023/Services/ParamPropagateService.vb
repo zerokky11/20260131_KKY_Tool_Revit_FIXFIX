@@ -962,7 +962,7 @@ Namespace Services
 
         '==================== 결과를 엑셀로 ====================
         Public Shared Function ExportResultToExcel(result As SharedParamRunResult, Optional doAutoFit As Boolean = False) As String
-            If result Is Nothing OrElse result.Details Is Nothing OrElse result.Details.Count = 0 Then Return String.Empty
+            If result Is Nothing Then Return String.Empty
 
             Dim defaultName As String = $"ParamProp_{Date.Now:yyMMdd_HHmmss}.xlsx"
 
@@ -976,13 +976,21 @@ Namespace Services
                 dt.Columns.Add("Family")
                 dt.Columns.Add("Detail")
 
-                For Each r In result.Details
+                If result.Details IsNot Nothing Then
+                    For Each r In result.Details
+                        Dim row = dt.NewRow()
+                        row("Type") = r.Kind
+                        row("Family") = r.Family
+                        row("Detail") = r.Detail
+                        dt.Rows.Add(row)
+                    Next
+                End If
+
+                If dt.Rows.Count = 0 Then
                     Dim row = dt.NewRow()
-                    row("Type") = r.Kind
-                    row("Family") = r.Family
-                    row("Detail") = r.Detail
+                    row(0) = "오류가 없습니다."
                     dt.Rows.Add(row)
-                Next
+                End If
 
                 Infrastructure.ExcelCore.SaveXlsx(sfd.FileName, "Results", dt, doAutoFit, "paramprop:progress")
                 Return sfd.FileName

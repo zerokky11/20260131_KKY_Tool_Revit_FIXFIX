@@ -471,9 +471,6 @@ Namespace Services
             End Try
 
             Dim logs As List(Of LogEntry) = ParseLogEntries(payload)
-            If logs Is Nothing OrElse logs.Count = 0 Then
-                Return New With {.ok = False, .message = "내보낼 로그가 없습니다."}
-            End If
 
             Dim rvtPaths As List(Of String) = ParseStringList(payload, "rvtPaths")
             Dim parameters As List(Of ParamToBind) = ParseParamList(payload)
@@ -536,6 +533,12 @@ Namespace Services
                     dt.Rows.Add(row)
                 Next
             Next
+
+            If dt.Rows.Count = 0 Then
+                Dim row = dt.NewRow()
+                row(0) = "오류가 없습니다."
+                dt.Rows.Add(row)
+            End If
 
             Dim fileName As String = $"SharedParamBatch_{DateTime.Now:yyyyMMdd_HHmm}.xlsx"
             Dim saved As String = ExcelCore.PickAndSaveXlsx("Logs", dt, fileName, doAutoFit, "sharedparambatch:progress")

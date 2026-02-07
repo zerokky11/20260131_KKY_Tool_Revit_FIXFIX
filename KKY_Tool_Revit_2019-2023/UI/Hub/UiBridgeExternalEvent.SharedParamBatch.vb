@@ -89,7 +89,7 @@ Namespace UI.Hub
 
         Private Sub HandleSharedParamBatchExportExcel(app As UIApplication, payload As Object)
             Try
-                If _lastSharedParamBatchResult Is Nothing OrElse _lastSharedParamBatchResult.Logs Is Nothing OrElse _lastSharedParamBatchResult.Logs.Count = 0 Then
+                If _lastSharedParamBatchResult Is Nothing Then
                     SendToWeb("sharedparambatch:exported", New With {.ok = False, .message = "최근 실행 결과가 없습니다."})
                     Return
                 End If

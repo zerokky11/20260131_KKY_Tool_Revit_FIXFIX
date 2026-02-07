@@ -474,11 +474,6 @@ NextItem:
             If excludeEndDummy Then
                 exportRows = exportRows.Where(Function(r) Not ShouldExcludeEndDummyRow(r)).ToList()
             End If
-            If exportRows.Count = 0 Then
-                SendToWeb("hub:multi-exported", New With {.ok = False, .message = "내보낼 커넥터 이슈가 없습니다."})
-                Return
-            End If
-
             Dim headers As List(Of String) = BuildConnectorHeaders(extras, uiUnit)
             Dim table = BuildConnectorTableFromRows(headers, exportRows)
             If Not ValidateSchema(table, headers) Then Throw New InvalidOperationException("스키마 검증 실패: 커넥터")
@@ -496,10 +491,7 @@ NextItem:
             Dim classRows = If(_multiPmsClassRows, New List(Of Dictionary(Of String, Object))())
             Dim sizeRows = If(_multiPmsSizeRows, New List(Of Dictionary(Of String, Object))())
             Dim routingRows = If(_multiPmsRoutingRows, New List(Of Dictionary(Of String, Object))())
-            If classRows.Count = 0 AndAlso sizeRows.Count = 0 AndAlso routingRows.Count = 0 Then
-                SendToWeb("hub:multi-exported", New With {.ok = False, .message = "PMS 결과가 없습니다."})
-                Return
-            End If
+            Dim totalRowsCount As Integer = classRows.Count + sizeRows.Count + routingRows.Count
             Dim sheetList As New List(Of KeyValuePair(Of String, DataTable))()
             Dim classHeaders = New List(Of String) From {"File", "PipeType", "Segment", "Class검토결과"}
             Dim sizeHeaders = New List(Of String) From {"FileName", "PipeType", "RevitSegment", "PMSCompared", "ND", "ID", "OD", "PMS ND", "PMS ID", "PMS OD", "Result"}
@@ -509,13 +501,25 @@ NextItem:
             Dim sizeTable = BuildTableFromRows(sizeHeaders, sizeRows)
             Dim routingTable = BuildTableFromRows(routingHeaders, routingRows)
 
+            If totalRowsCount = 0 Then
+                AddEmptyMessageRow(classTable)
+                AddEmptyMessageRow(sizeTable)
+                AddEmptyMessageRow(routingTable)
+            End If
+
             If classTable.Rows.Count > 0 AndAlso Not ValidateSchema(classTable, classHeaders) Then Throw New InvalidOperationException("스키마 검증 실패: PMS Class")
             If sizeTable.Rows.Count > 0 AndAlso Not ValidateSchema(sizeTable, sizeHeaders) Then Throw New InvalidOperationException("스키마 검증 실패: PMS Size")
             If routingTable.Rows.Count > 0 AndAlso Not ValidateSchema(routingTable, routingHeaders) Then Throw New InvalidOperationException("스키마 검증 실패: PMS Routing")
 
-            If classTable.Rows.Count > 0 Then sheetList.Add(New KeyValuePair(Of String, DataTable)("Pipe Segment Class검토", classTable))
-            If sizeTable.Rows.Count > 0 Then sheetList.Add(New KeyValuePair(Of String, DataTable)("PMS vs Segment Size검토", sizeTable))
-            If routingTable.Rows.Count > 0 Then sheetList.Add(New KeyValuePair(Of String, DataTable)("Routing Class검토", routingTable))
+            If totalRowsCount = 0 Then
+                sheetList.Add(New KeyValuePair(Of String, DataTable)("Pipe Segment Class검토", classTable))
+                sheetList.Add(New KeyValuePair(Of String, DataTable)("PMS vs Segment Size검토", sizeTable))
+                sheetList.Add(New KeyValuePair(Of String, DataTable)("Routing Class검토", routingTable))
+            Else
+                If classTable.Rows.Count > 0 Then sheetList.Add(New KeyValuePair(Of String, DataTable)("Pipe Segment Class검토", classTable))
+                If sizeTable.Rows.Count > 0 Then sheetList.Add(New KeyValuePair(Of String, DataTable)("PMS vs Segment Size검토", sizeTable))
+                If routingTable.Rows.Count > 0 Then sheetList.Add(New KeyValuePair(Of String, DataTable)("Routing Class검토", routingTable))
+            End If
 
             Dim saved = ExcelCore.PickAndSaveXlsxMulti(sheetList, $"SegmentPms_{Date.Now:yyyyMMdd_HHmm}.xlsx", doAutoFit, "hub:multi-progress")
             If String.IsNullOrWhiteSpace(saved) Then
@@ -548,13 +552,6 @@ NextItem:
 
         Private Sub ExportFamilyLink(doAutoFit As Boolean)
             Dim rows = If(_multiFamilyLinkRows, New List(Of FamilyLinkAuditRow)())
-            If rows.Count = 0 Then
-                rows.Add(New FamilyLinkAuditRow With {
-                    .FileName = "(Summary)",
-                    .Issue = "OK",
-                    .Notes = "검토 완료: 이상 없음(0건)"
-                })
-            End If
             Dim saved = FamilyLinkAuditExport.Export(rows, fastExport:=Not doAutoFit, autoFit:=doAutoFit)
             If String.IsNullOrWhiteSpace(saved) Then
                 SendToWeb("hub:multi-exported", New With {.ok = False, .message = "엑셀 저장이 취소되었습니다."})
@@ -565,17 +562,14 @@ NextItem:
         End Sub
 
         Private Sub ExportPoints(doAutoFit As Boolean)
-            If _multiPointRows Is Nothing OrElse _multiPointRows.Count = 0 Then
-                SendToWeb("hub:multi-exported", New With {.ok = False, .message = "Point 추출 결과가 없습니다."})
-                Return
-            End If
+            Dim pointRows = If(_multiPointRows, New List(Of ExportPointsService.Row)())
             Dim unit As String = "ft"
             If _multiRequest IsNot Nothing AndAlso _multiRequest.Points IsNot Nothing Then
                 unit = _multiRequest.Points.Unit
             End If
             Dim headers = BuildPointHeaders(unit)
             Dim rows As New List(Of Dictionary(Of String, Object))()
-            For Each r In _multiPointRows
+            For Each r In pointRows
                 rows.Add(New Dictionary(Of String, Object) From {
                     {"File", r.File},
                     {"ProjectPoint_E", ConvertPoint(r.ProjectE, unit)},
@@ -812,7 +806,12 @@ NextItem:
                     dt.Columns.Add(h)
                 End If
             Next
-            If rows Is Nothing Then Return dt
+            If rows Is Nothing OrElse rows.Count = 0 Then
+                Dim dr = dt.NewRow()
+                dr(0) = "오류가 없습니다."
+                dt.Rows.Add(dr)
+                Return dt
+            End If
 
             For Each r In rows
                 Dim dr = dt.NewRow()
@@ -870,6 +869,15 @@ NextItem:
             Next
             Return dt
         End Function
+
+        Private Shared Sub AddEmptyMessageRow(table As DataTable)
+            If table Is Nothing Then Return
+            If table.Rows.Count > 0 Then Return
+            If table.Columns.Count = 0 Then Return
+            Dim dr = table.NewRow()
+            dr(0) = "오류가 없습니다."
+            table.Rows.Add(dr)
+        End Sub
 
         Private Shared Function ValidateSchema(table As DataTable, headers As IList(Of String)) As Boolean
             If table Is Nothing OrElse headers Is Nothing Then Return False
@@ -955,6 +963,12 @@ NextItem:
             For Each h In headers
                 dt.Columns.Add(h)
             Next
+            If rows Is Nothing OrElse rows.Count = 0 Then
+                Dim dr = dt.NewRow()
+                dr(0) = "오류가 없습니다."
+                dt.Rows.Add(dr)
+                Return dt
+            End If
             For Each r In rows
                 Dim dr = dt.NewRow()
                 dr(0) = SafeStr(GetRowValue(r, "File"))

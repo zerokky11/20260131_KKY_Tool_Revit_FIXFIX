@@ -144,7 +144,7 @@ Namespace UI.Hub
         End Sub
 
         Private Sub HandleFamilyLinkExport(payload As Object)
-            If _familyLinkLastRows Is Nothing OrElse _familyLinkLastRows.Count = 0 Then
+            If _familyLinkLastRows Is Nothing Then
                 SendToWeb("familylink:error", New With {
                     .message = "내보낼 결과가 없습니다.",
                     .detail = "먼저 스캔을 실행하세요."
