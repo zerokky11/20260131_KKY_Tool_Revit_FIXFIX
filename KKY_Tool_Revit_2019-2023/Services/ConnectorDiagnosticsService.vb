@@ -887,12 +887,16 @@ Namespace Services
         ' Converters / Helpers
         ' ============================
 
-        Private Shared Function ToTolFt(tol As Double, unit As String) As Double
-            If String.Equals(unit, "mm", StringComparison.OrdinalIgnoreCase) Then
+        Public Shared Function ToTolFt(tol As Double, unit As String) As Double
+            Dim normalizedUnit = If(unit, String.Empty).Trim().ToLowerInvariant()
+            If normalizedUnit = "mm" OrElse normalizedUnit = "millimeter" OrElse normalizedUnit = "millimeters" Then
                 Return tol / 304.8
             End If
-            If String.Equals(unit, "inch", StringComparison.OrdinalIgnoreCase) OrElse String.Equals(unit, "in", StringComparison.OrdinalIgnoreCase) Then
+            If normalizedUnit = "inch" OrElse normalizedUnit = "in" OrElse normalizedUnit = "inches" Then
                 Return tol / 12.0
+            End If
+            If normalizedUnit = "ft" OrElse normalizedUnit = "feet" Then
+                Return tol
             End If
             Return tol
         End Function

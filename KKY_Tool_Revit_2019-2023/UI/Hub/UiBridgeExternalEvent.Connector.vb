@@ -153,14 +153,7 @@ Namespace UI.Hub
                 _lastConnectorExcludeEndDummy = _connectorExcludeEndDummy
 
                 ' === 단위 변환 → feet ===
-                Dim tolFt As Double = 0.0
-                Dim u = (If(unit, "inch")).Trim().ToLowerInvariant()
-                If u = "mm" OrElse u = "millimeter" OrElse u = "millimeters" Then
-                    tolFt = tol / 304.8R
-                Else
-                    ' inch 또는 기타 → inch 가정
-                    tolFt = tol / 12.0R
-                End If
+                Dim tolFt As Double = Services.ConnectorDiagnosticsService.ToTolFt(tol, unit)
                 If tolFt < 0.0000001 Then tolFt = 0.0000001R
                 LogDebug($"[connector] tolFt 계산 완료: {tolFt}")
 
