@@ -259,6 +259,9 @@ Namespace Services
                                     Catch
                                     End Try
 
+                                    If d = Double.MaxValue Then Continue For
+                                    If d > tolFt Then Continue For
+
                                     If d < bestDist Then
                                         bestDist = d
                                         bestOwner = r.Owner
@@ -267,7 +270,7 @@ Namespace Services
 
                                 If bestOwner IsNot Nothing Then
                                     found = bestOwner
-                                    distFt = If(bestDist = Double.MaxValue, 0.0, bestDist)
+                                    distFt = 0.0
                                     connType = "Physical(커넥터 연결 됨)"
                                 End If
                             End If
