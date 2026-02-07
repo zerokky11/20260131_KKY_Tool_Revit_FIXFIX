@@ -153,7 +153,7 @@ Namespace UI.Hub
         ' === sharedparam:export-excel ===
         Private Sub HandleSharedParamExport(app As UIApplication, payload As Object)
             Try
-                If _lastParamResult Is Nothing OrElse _lastParamResult.Details Is Nothing OrElse _lastParamResult.Details.Count = 0 Then
+                If _lastParamResult Is Nothing Then
                     SendToWeb("sharedparam:exported", New With {.ok = False, .message = "최근 실행 결과가 없습니다."})
                     Return
                 End If

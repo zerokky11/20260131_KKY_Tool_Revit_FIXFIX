@@ -543,14 +543,19 @@ Namespace UI.Hub
                     LogAutoFitDecision(doAutoFit, "UiBridgeExternalEvent.HandleSegmentPmsSaveResult")
                     Dim wb As IWorkbook = New XSSFWorkbook()
 
-                    If classRows.Count = 0 AndAlso sizeRows.Count = 0 AndAlso routingRows.Count = 0 Then
-                        SendToWeb("segmentpms:error", New With {.message = "먼저 검토를 실행하세요."})
-                        Return
+                    Dim classHeaders As New List(Of String) From {"File", "PipeType", "Segment", "Class검토결과"}
+                    Dim sizeHeaders As New List(Of String) From {"FileName", "PipeType", "RevitSegment", "PMSCompared", "ND", "ID", "OD", "PMS ND", "PMS ID", "PMS OD", "Result"}
+                    Dim routingHeaders As New List(Of String) From {"File", "PipeType", "Part", "Type", "Class검토"}
+
+                    If totalRowsCount = 0 Then
+                        classRows = BuildEmptyRows(classHeaders)
+                        sizeRows = BuildEmptyRows(sizeHeaders)
+                        routingRows = BuildEmptyRows(routingHeaders)
                     End If
 
-                    AddSheet(wb, "Pipe Segment Class검토", classRows, New List(Of String) From {"File", "PipeType", "Segment", "Class검토결과"}, "segmentpms:progress", written, totalRowsCount, doAutoFit)
-                    AddSheet(wb, "PMS vs Segment Size검토", sizeRows, New List(Of String) From {"FileName", "PipeType", "RevitSegment", "PMSCompared", "ND", "ID", "OD", "PMS ND", "PMS ID", "PMS OD", "Result"}, "segmentpms:progress", written, totalRowsCount, doAutoFit)
-                    AddSheet(wb, "Routing Class검토", routingRows, New List(Of String) From {"File", "PipeType", "Part", "Type", "Class검토"}, "segmentpms:progress", written, totalRowsCount, doAutoFit)
+                    AddSheet(wb, "Pipe Segment Class검토", classRows, classHeaders, "segmentpms:progress", written, totalRowsCount, doAutoFit)
+                    AddSheet(wb, "PMS vs Segment Size검토", sizeRows, sizeHeaders, "segmentpms:progress", written, totalRowsCount, doAutoFit)
+                    AddSheet(wb, "Routing Class검토", routingRows, routingHeaders, "segmentpms:progress", written, totalRowsCount, doAutoFit)
                     Dim savePath As String = dlg.FileName
                     Try
                         savePath = System.IO.Path.GetFullPath(dlg.FileName)
@@ -762,6 +767,15 @@ Namespace UI.Hub
             ExcelCore.ApplyNumberFormatByHeader(wb, sh, 0, New String() {"ND", "ID", "OD", "PMS ND", "PMS ID", "PMS OD", "PMS_ND", "PMS_ID", "PMS_OD", "Diff_ID", "Diff_OD", "ND_mm", "ID_mm", "OD_mm"}, "0.####################")
             ExcelCore.ApplyResultFillByHeader(wb, sh, 0)
         End Sub
+
+        Private Shared Function BuildEmptyRows(columns As IList(Of String)) As List(Of Dictionary(Of String, Object))
+            Dim list As New List(Of Dictionary(Of String, Object))()
+            If columns Is Nothing OrElse columns.Count = 0 Then Return list
+            Dim row As New Dictionary(Of String, Object)(StringComparer.Ordinal)
+            row(columns(0)) = "오류가 없습니다."
+            list.Add(row)
+            Return list
+        End Function
 
         Private Shared Function DictListToDataTable(rows As List(Of Dictionary(Of String, Object)), tableName As String) As DataTable
             Dim t As New DataTable(tableName)

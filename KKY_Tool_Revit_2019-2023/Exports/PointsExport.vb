@@ -5,16 +5,27 @@ Namespace Exports
 
     Public Module PointsExport
 
-        ' ÀúÀå ´ëÈ­»óÀÚ »ç¿ë
+            EnsureMessageRow(resultTable)
+            EnsureMessageRow(resultTable)
+        Private Sub EnsureMessageRow(table As DataTable)
+            If table Is Nothing Then Return
+            If table.Rows.Count > 0 Then Return
+            If table.Columns.Count = 0 Then Return
+            Dim dr = table.NewRow()
+            dr(0) = " Ï´."
+            table.Rows.Add(dr)
+        End Sub
+
+        ' ì €ì¥ ëŒ€í™”ìƒì ì‚¬ìš©
         Public Function SaveWithDialog(resultTable As DataTable) As String
             If resultTable Is Nothing Then Return String.Empty
             Return ExcelCore.PickAndSaveXlsx("Exported Points", resultTable, "ExportPoints.xlsx")
         End Function
 
-        ' °æ·Î ÁöÁ¤ ÀúÀå
+        ' ê²½ë¡œ ì§€ì • ì €ì¥
         Public Sub Save(outPath As String, resultTable As DataTable)
             If resultTable Is Nothing Then Exit Sub
-            ' ÀÏºÎ ·¹°Å½Ã¿¡¼­´Â SaveXlsx(filePath, table) ½Ã±×´ÏÃ³¸¦ »ç¿ëÇÔ ¡æ ExcelCore ¿À¹ö·Îµå·Î Èí¼ö
+            ' ì¼ë¶€ ë ˆê±°ì‹œì—ì„œëŠ” SaveXlsx(filePath, table) ì‹œê·¸ë‹ˆì²˜ë¥¼ ì‚¬ìš©í•¨ â†’ ExcelCore ì˜¤ë²„ë¡œë“œë¡œ í¡ìˆ˜
             ExcelCore.SaveXlsx(outPath, "Exported Points", resultTable)
         End Sub
 

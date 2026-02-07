@@ -94,6 +94,12 @@ Namespace Exports
                 dt.Rows.Add(dr)
             Next
 
+            If dt.Rows.Count = 0 Then
+                Dim dr = dt.NewRow()
+                dr("FileName") = "오류가 없습니다."
+                dt.Rows.Add(dr)
+            End If
+
             Return dt
         End Function
 

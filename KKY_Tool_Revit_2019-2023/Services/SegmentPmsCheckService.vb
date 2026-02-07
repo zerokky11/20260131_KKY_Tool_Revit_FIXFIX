@@ -2595,6 +2595,12 @@ Namespace Services
             Dim numStyle = wb.CreateCellStyle()
             numStyle.DataFormat = wb.CreateDataFormat().GetFormat("0.###############")
             Dim r As Integer = 1
+            If totalRows = 0 AndAlso t.Rows.Count = 0 Then
+                Dim msgRow = sh.CreateRow(r)
+                msgRow.CreateCell(0).SetCellValue("오류가 없습니다.")
+                Global.KKY_Tool_Revit.UI.Hub.ExcelProgressReporter.Report(progressChannel, "EXCEL_WRITE", "엑셀 데이터 작성", written, totalRows)
+                Return
+            End If
             For Each row As DataRow In t.Rows
                 Dim rr = sh.CreateRow(r)
                 For ci As Integer = 0 To t.Columns.Count - 1
