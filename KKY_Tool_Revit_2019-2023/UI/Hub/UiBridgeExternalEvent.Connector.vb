@@ -152,17 +152,12 @@ Namespace UI.Hub
                 _lastConnectorTargetFilter = _connectorTargetFilter
                 _lastConnectorExcludeEndDummy = _connectorExcludeEndDummy
 
-                ' === 단위 변환 → feet ===
-                Dim tolFt As Double = Services.ConnectorDiagnosticsService.ToTolFt(tol, unit)
-                If tolFt < 0.0000001 Then tolFt = 0.0000001R
-                LogDebug($"[connector] tolFt 계산 완료: {tolFt}")
-
                 ' === 서비스 호출 ===
                 LogDebug("[connector] 커넥터 수집/진단 실행 시작")
                 Const PREVIEW_LIMIT As Integer = 150
                 Dim rows As List(Of Dictionary(Of String, Object)) = Nothing
                 Try
-                    rows = Services.ConnectorDiagnosticsService.Run(app, tolFt, param, _connectorExtraParams, _connectorTargetFilter, _connectorExcludeEndDummy, AddressOf ReportConnectorProgress)
+                    rows = Services.ConnectorDiagnosticsService.Run(app, tol, unit, param, _connectorExtraParams, _connectorTargetFilter, _connectorExcludeEndDummy, AddressOf ReportConnectorProgress)
                 Catch ex As Exception
                     ' 네임스페이스 변동 대비 리플렉션 재시도
                     Try
@@ -173,14 +168,12 @@ Namespace UI.Hub
                             If m IsNot Nothing Then
                                 Dim args As Object()
                                 Dim ps = m.GetParameters()
-                                If ps.Length >= 7 Then
-                                    args = New Object() {app, tolFt, param, _connectorExtraParams, _connectorTargetFilter, _connectorExcludeEndDummy, CType(AddressOf ReportConnectorProgress, Action(Of Double, String))}
+                                If ps.Length >= 8 Then
+                                    args = New Object() {app, tol, unit, param, _connectorExtraParams, _connectorTargetFilter, _connectorExcludeEndDummy, CType(AddressOf ReportConnectorProgress, Action(Of Double, String))}
                                 ElseIf ps.Length >= 6 Then
-                                    args = New Object() {app, tolFt, param, _connectorExtraParams, _connectorTargetFilter, _connectorExcludeEndDummy}
-                                ElseIf ps.Length = 4 Then
-                                    args = New Object() {app, tolFt, param, _connectorExtraParams}
+                                    args = New Object() {app, tol, unit, param, _connectorExtraParams, CType(AddressOf ReportConnectorProgress, Action(Of Double, String))}
                                 Else
-                                    args = New Object() {app, tolFt, param}
+                                    args = New Object() {app, tol, unit, param}
                                 End If
                                 rows = CType(m.Invoke(Nothing, args), List(Of Dictionary(Of String, Object)))
                             End If
