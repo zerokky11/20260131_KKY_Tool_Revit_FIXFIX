@@ -1,5 +1,6 @@
 Imports System
 Imports System.Collections.Generic
+Imports System.Diagnostics
 Imports System.Globalization
 Imports System.IO
 Imports System.Linq
@@ -39,18 +40,18 @@ Namespace Services
         ' ============================
 
         ' 3-인자: tolFt 는 피트 단위 (ft)
-        Public Shared Function Run(app As UIApplication, tolFt As Double, param As String,
+        Private Shared Function Run(app As UIApplication, tolFt As Double, param As String,
                                    Optional progress As Action(Of Double, String) = Nothing) As List(Of Dictionary(Of String, Object))
             Return Run(app, tolFt, param, CType(Nothing, IEnumerable(Of String)), Nothing, False, False, progress)
         End Function
 
-        Public Shared Function Run(app As UIApplication, tolFt As Double, param As String,
+        Private Shared Function Run(app As UIApplication, tolFt As Double, param As String,
                                    extraParams As IEnumerable(Of String),
                                    Optional progress As Action(Of Double, String) = Nothing) As List(Of Dictionary(Of String, Object))
             Return Run(app, tolFt, param, extraParams, Nothing, False, False, progress)
         End Function
 
-        Public Shared Function Run(app As UIApplication, tolFt As Double, param As String,
+        Private Shared Function Run(app As UIApplication, tolFt As Double, param As String,
                                    extraParams As IEnumerable(Of String),
                                    targetFilter As String,
                                    excludeEndDummy As Boolean,
@@ -59,7 +60,7 @@ Namespace Services
         End Function
 
         ' ✅ includeOkRows: OK까지 포함하여 추출할지 여부 (기본 False)
-        Public Shared Function Run(app As UIApplication, tolFt As Double, param As String,
+        Private Shared Function Run(app As UIApplication, tolFt As Double, param As String,
                                    extraParams As IEnumerable(Of String),
                                    targetFilter As String,
                                    excludeEndDummy As Boolean,
@@ -80,7 +81,7 @@ Namespace Services
             Return RunCore(doc, tolFt, param, extraParams, targetFilter, excludeEndDummy, includeOkRows, progress, fileLabel)
         End Function
 
-        Public Shared Function RunOnDocument(doc As Document,
+        Private Shared Function RunOnDocument(doc As Document,
                                              tolFt As Double,
                                              param As String,
                                              extraParams As IEnumerable(Of String),
@@ -90,7 +91,7 @@ Namespace Services
             Return RunOnDocument(doc, tolFt, param, extraParams, targetFilter, excludeEndDummy, False, progress)
         End Function
 
-        Public Shared Function RunOnDocument(doc As Document,
+        Private Shared Function RunOnDocument(doc As Document,
                                              tolFt As Double,
                                              param As String,
                                              extraParams As IEnumerable(Of String),
@@ -117,18 +118,21 @@ Namespace Services
                                              excludeEndDummy As Boolean,
                                              Optional progress As Action(Of Double, String) = Nothing) As List(Of Dictionary(Of String, Object))
             Dim tolFt As Double = ToTolFt(tol, unit)
+            Debug.WriteLine($"[Connector] tol={tol}, unit={unit}, tolFt={tolFt}")
             Return RunOnDocument(doc, tolFt, paramName, extraParams, targetFilter, excludeEndDummy, False, progress)
         End Function
 
         ' 4-인자: tol 은 unit 기준(mm/inch/ft) → 내부에서 ft 로 환산 후 3-인자 호출
         Public Shared Function Run(app As UIApplication, tol As Double, unit As String, paramName As String,
                                    Optional progress As Action(Of Double, String) = Nothing) As List(Of Dictionary(Of String, Object))
+            Debug.WriteLine($"[Connector] tol={tol}, unit={unit}, tolFt={ToTolFt(tol, unit)}")
             Return Run(app, ToTolFt(tol, unit), paramName, CType(Nothing, IEnumerable(Of String)), Nothing, False, False, progress)
         End Function
 
         Public Shared Function Run(app As UIApplication, tol As Double, unit As String, paramName As String,
                                    extraParams As IEnumerable(Of String),
                                    Optional progress As Action(Of Double, String) = Nothing) As List(Of Dictionary(Of String, Object))
+            Debug.WriteLine($"[Connector] tol={tol}, unit={unit}, tolFt={ToTolFt(tol, unit)}")
             Return Run(app, ToTolFt(tol, unit), paramName, extraParams, Nothing, False, False, progress)
         End Function
 
@@ -137,6 +141,7 @@ Namespace Services
                                    targetFilter As String,
                                    excludeEndDummy As Boolean,
                                    Optional progress As Action(Of Double, String) = Nothing) As List(Of Dictionary(Of String, Object))
+            Debug.WriteLine($"[Connector] tol={tol}, unit={unit}, tolFt={ToTolFt(tol, unit)}")
             Return Run(app, ToTolFt(tol, unit), paramName, extraParams, targetFilter, excludeEndDummy, False, progress)
         End Function
 
@@ -259,6 +264,9 @@ Namespace Services
                                     Catch
                                     End Try
 
+                                    If d = Double.MaxValue Then Continue For
+                                    If d > tolFt Then Continue For
+
                                     If d < bestDist Then
                                         bestDist = d
                                         bestOwner = r.Owner
@@ -267,7 +275,7 @@ Namespace Services
 
                                 If bestOwner IsNot Nothing Then
                                     found = bestOwner
-                                    distFt = If(bestDist = Double.MaxValue, 0.0, bestDist)
+                                    distFt = 0.0
                                     connType = "Physical(커넥터 연결 됨)"
                                 End If
                             End If
@@ -887,12 +895,16 @@ Namespace Services
         ' Converters / Helpers
         ' ============================
 
-        Private Shared Function ToTolFt(tol As Double, unit As String) As Double
-            If String.Equals(unit, "mm", StringComparison.OrdinalIgnoreCase) Then
+        Public Shared Function ToTolFt(tol As Double, unit As String) As Double
+            Dim normalizedUnit = If(unit, String.Empty).Trim().ToLowerInvariant()
+            If normalizedUnit = "mm" OrElse normalizedUnit = "millimeter" OrElse normalizedUnit = "millimeters" Then
                 Return tol / 304.8
             End If
-            If String.Equals(unit, "inch", StringComparison.OrdinalIgnoreCase) OrElse String.Equals(unit, "in", StringComparison.OrdinalIgnoreCase) Then
+            If normalizedUnit = "inch" OrElse normalizedUnit = "in" OrElse normalizedUnit = "inches" Then
                 Return tol / 12.0
+            End If
+            If normalizedUnit = "ft" OrElse normalizedUnit = "feet" Then
+                Return tol
             End If
             Return tol
         End Function
