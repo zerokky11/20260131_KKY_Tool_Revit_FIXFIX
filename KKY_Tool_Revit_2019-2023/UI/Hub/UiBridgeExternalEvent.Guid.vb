@@ -174,13 +174,15 @@ Namespace UI.Hub
                 End If
 
                 Dim doAutoFit As Boolean = ParseExcelMode(payload)
+                Dim isFastMode As Boolean = String.Equals(excelMode, "fast", StringComparison.OrdinalIgnoreCase)
+                Dim exportMode As String = If(isFastMode, "fast", If(doAutoFit, "normal", "fast"))
                 LogAutoFitDecision(doAutoFit, "GuidAuditExport")
-                Dim saved = GuidAuditService.ExportMulti(sheetList, If(String.Equals(excelMode, "fast", StringComparison.OrdinalIgnoreCase), "fast", If(doAutoFit, "normal", "manual")), "guid:progress")
+                Dim saved = GuidAuditService.ExportMulti(sheetList, exportMode, "guid:progress")
                 If String.IsNullOrWhiteSpace(saved) Then
                     SendToWeb("guid:error", New With {.message = "엑셀 내보내기가 취소되었습니다."})
                     Return
                 End If
-                Infrastructure.ExcelExportStyleRegistry.ApplyStylesForKey("guid", saved, autoFit:=doAutoFit, excelMode:=If(String.Equals(excelMode, "fast", StringComparison.OrdinalIgnoreCase), "fast", "normal"))
+                Infrastructure.ExcelExportStyleRegistry.ApplyStylesForKey("guid", saved, autoFit:=doAutoFit, excelMode:=exportMode)
                 SendToWeb("guid:exported", New With {.path = saved, .which = which})
             Catch ex As Exception
                 SendToWeb("guid:error", New With {.message = "엑셀 내보내기 실패: " & ex.Message})

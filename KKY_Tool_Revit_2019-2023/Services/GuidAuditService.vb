@@ -552,7 +552,7 @@ Namespace Services
                     dt.Columns.Add("ParamName", GetType(String))
                     dt.Columns.Add("ParamKind", GetType(String))
                     dt.Columns.Add("ParamGroup", GetType(String))
-                    dt.Columns.Add("Categories", GetType(String))
+                    dt.Columns.Add("BindingCategories", GetType(String))
                     dt.Columns.Add("RvtGuid", GetType(String))
                     dt.Columns.Add("FileGuid", GetType(String))
                     dt.Columns.Add("Result", GetType(String))
@@ -583,7 +583,7 @@ Namespace Services
                 If dt.Columns.Contains("ParamName") Then r("ParamName") = ""
                 If dt.Columns.Contains("ParamKind") Then r("ParamKind") = ""
                 If dt.Columns.Contains("ParamGroup") Then r("ParamGroup") = ""
-                If dt.Columns.Contains("Categories") Then r("Categories") = ""
+                If dt.Columns.Contains("BindingCategories") Then r("BindingCategories") = ""
                 If dt.Columns.Contains("RvtGuid") Then r("RvtGuid") = ""
                 If dt.Columns.Contains("IsShared") Then r("IsShared") = ""
                 If dt.Columns.Contains("FamilyGuid") Then r("FamilyGuid") = ""
@@ -605,7 +605,7 @@ Namespace Services
                 dt.Columns.Add("ParamName", GetType(String))
                 dt.Columns.Add("ParamKind", GetType(String))
                 dt.Columns.Add("ParamGroup", GetType(String))
-                dt.Columns.Add("Categories", GetType(String))
+                dt.Columns.Add("BindingCategories", GetType(String))
                 dt.Columns.Add("RvtGuid", GetType(String))
                 dt.Columns.Add("FileGuid", GetType(String))
                 dt.Columns.Add("Result", GetType(String))
@@ -742,7 +742,7 @@ Namespace Services
                     r("ParamName") = name
                     r("ParamKind") = kind
                     r("ParamGroup") = SafeParameterGroupName(def)
-                    r("Categories") = FormatBindingCategories(binding)
+                    r("BindingCategories") = FormatBindingCategories(binding)
                     r("RvtGuid") = projGuid
                     r("FileGuid") = fileGuid
                     r("Result") = result
@@ -763,7 +763,13 @@ Namespace Services
                 Try
                     Dim idef = TryCast(def, InternalDefinition)
                     If idef IsNot Nothing Then
-                        Return idef.ParameterGroup.ToString()
+                        Dim pg As BuiltInParameterGroup = idef.ParameterGroup
+                        Try
+                            Dim label As String = LabelUtils.GetLabelFor(pg)
+                            If Not String.IsNullOrWhiteSpace(label) Then Return label
+                        Catch
+                        End Try
+                        Return pg.ToString()
                     End If
                 Catch
                 End Try
@@ -772,20 +778,28 @@ Namespace Services
 
             Private Shared Function FormatBindingCategories(binding As ElementBinding) As String
                 If binding Is Nothing OrElse binding.Categories Is Nothing Then Return ""
+
                 Dim names As New List(Of String)()
                 For Each cat As Category In binding.Categories
                     If cat Is Nothing Then Continue For
-                    Dim n As String = If(cat.Name, "")
-                    If String.IsNullOrWhiteSpace(n) Then Continue For
-                    names.Add($"[{n}]")
+
+                    Dim parentName As String = If(cat.Name, "")
+                    If String.IsNullOrWhiteSpace(parentName) Then Continue For
+                    names.Add($"[{parentName}]")
+
                     Try
-                        For Each subCat As Category In cat.SubCategories
-                            Dim sn As String = If(subCat.Name, "")
-                            If Not String.IsNullOrWhiteSpace(sn) Then names.Add($"[{sn}]")
+                        Dim subCats As CategoryNameMap = cat.SubCategories
+                        If subCats Is Nothing Then Continue For
+                        For Each subCat As Category In subCats
+                            If subCat Is Nothing Then Continue For
+                            Dim childName As String = If(subCat.Name, "")
+                            If String.IsNullOrWhiteSpace(childName) Then Continue For
+                            names.Add($"[{parentName}/{childName}]")
                         Next
                     Catch
                     End Try
                 Next
+
                 Return String.Join(",", names.Distinct(StringComparer.OrdinalIgnoreCase).ToArray())
             End Function
 
