@@ -1,4 +1,4 @@
-Imports System.Data
+﻿Imports System.Data
 Imports KKY_Tool_Revit.Infrastructure
 
 Namespace Exports
@@ -6,7 +6,7 @@ Namespace Exports
     Public Module PointsExport
 
         Private Sub EnsureMessageRow(table As DataTable)
-            ExcelCore.EnsureMessageRow(table, "오류 없음")
+            ExcelCore.EnsureMessageRow(table, "오류가 없습니다.")
         End Sub
 
         ' 저장 대화상자 사용

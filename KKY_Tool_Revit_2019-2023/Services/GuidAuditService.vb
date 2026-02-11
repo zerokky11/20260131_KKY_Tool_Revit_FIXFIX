@@ -169,7 +169,7 @@ Namespace Services
             Catch
                 doAutoFit = False
             End Try
-            ExcelCore.EnsureMessageRow(table, "오류 없음")
+            ExcelCore.EnsureMessageRow(table, "오류가 없습니다.")
             Return ExcelCore.PickAndSaveXlsx(sheetName, table, $"{sheetName}_{DateTime.Now:yyyyMMdd_HHmm}.xlsx", doAutoFit, progressChannel)
         End Function
 
@@ -187,7 +187,7 @@ Namespace Services
                 doAutoFit = False
             End Try
             For Each kv In sheets
-                ExcelCore.EnsureMessageRow(kv.Value, "오류 없음")
+                ExcelCore.EnsureMessageRow(kv.Value, "오류가 없습니다.")
             Next
             Dim fileName As String = $"GuidAudit_{DateTime.Now:yyyyMMdd_HHmm}.xlsx"
             Return ExcelCore.PickAndSaveXlsxMulti(sheets, fileName, doAutoFit, progressChannel)
@@ -203,7 +203,7 @@ Namespace Services
                 Next
             End If
 
-            ExcelCore.EnsureMessageRow(exportTable, "오류 없음")
+            ExcelCore.EnsureMessageRow(exportTable, "오류가 없습니다.")
 
             Return exportTable
         End Function

@@ -55,6 +55,7 @@ Namespace Infrastructure
             If table Is Nothing Then Throw New ArgumentNullException(NameOf(table))
 
             EnsureDir(filePath)
+            EnsureNoDataRow(table, "오류가 없습니다.")
 
             Using wb As IWorkbook = New XSSFWorkbook()
                 Dim safeSheet = NormalizeSheetName(If(sheetName, "Sheet1"))
@@ -89,6 +90,7 @@ Namespace Infrastructure
                     Dim safe = MakeUniqueSheetName(NormalizeSheetName(name), usedNames)
                     usedNames.Add(safe)
 
+                    EnsureNoDataRow(table, "오류가 없습니다.")
                     Dim sheet = wb.CreateSheet(safe)
                     WriteTableToSheet(wb, sheet, safe, table, sheetKey:=name, autoFit:=autoFit, progressKey:=progressKey, exportKind:=Nothing)
                 Next
@@ -194,15 +196,53 @@ Namespace Infrastructure
         End Sub
 
 
-        Public Sub EnsureMessageRow(table As DataTable,
-                                    Optional message As String = "오류 없음")
+        Public Sub EnsureNoDataRow(table As DataTable,
+                                   message As String,
+                                   Optional statusColumnCandidates As String() = Nothing)
             If table Is Nothing Then Return
             If table.Columns.Count = 0 Then Return
             If table.Rows.Count > 0 Then Return
 
+            Dim finalMessage As String = If(String.IsNullOrWhiteSpace(message), "오류가 없습니다.", message)
             Dim row = table.NewRow()
-            row(0) = If(String.IsNullOrWhiteSpace(message), "오류 없음", message)
+
+            Dim textColIndex As Integer = -1
+            For i As Integer = 0 To table.Columns.Count - 1
+                Dim col = table.Columns(i)
+                If col IsNot Nothing AndAlso col.DataType Is GetType(String) Then
+                    textColIndex = i
+                    Exit For
+                End If
+            Next
+            If textColIndex < 0 Then textColIndex = 0
+            If table.Columns(textColIndex).DataType Is GetType(String) OrElse table.Columns(textColIndex).DataType Is GetType(Object) Then
+                row(textColIndex) = finalMessage
+            Else
+                row(0) = finalMessage
+            End If
+
+            Dim candidates As String() = statusColumnCandidates
+            If candidates Is Nothing OrElse candidates.Length = 0 Then
+                candidates = New String() {"Result", "Status", "결과"}
+            End If
+            For Each candidate In candidates
+                If String.IsNullOrWhiteSpace(candidate) Then Continue For
+                For Each col As DataColumn In table.Columns
+                    If String.Equals(col.ColumnName, candidate, StringComparison.OrdinalIgnoreCase) Then
+                        If col.DataType Is GetType(String) OrElse col.DataType Is GetType(Object) Then
+                            row(col) = "NO_DATA"
+                        End If
+                        Exit For
+                    End If
+                Next
+            Next
+
             table.Rows.Add(row)
+        End Sub
+
+        Public Sub EnsureMessageRow(table As DataTable,
+                                    Optional message As String = "오류가 없습니다.")
+            EnsureNoDataRow(table, message)
         End Sub
 
         Public Sub SaveCsv(filePath As String, table As DataTable)

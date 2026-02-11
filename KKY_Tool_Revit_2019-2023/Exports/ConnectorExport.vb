@@ -1,4 +1,4 @@
-Imports System
+﻿Imports System
 Imports System.Data
 
 Namespace Exports
@@ -39,7 +39,7 @@ Namespace Exports
         End Sub
 
         Private Sub EnsureMessageRow(table As DataTable)
-            Global.KKY_Tool_Revit.Infrastructure.ExcelCore.EnsureMessageRow(table, "오류 없음")
+            Global.KKY_Tool_Revit.Infrastructure.ExcelCore.EnsureMessageRow(table, "오류가 없습니다.")
         End Sub
 
     End Module

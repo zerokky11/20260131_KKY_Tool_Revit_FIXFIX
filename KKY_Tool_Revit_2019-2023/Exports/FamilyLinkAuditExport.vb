@@ -96,7 +96,7 @@ Namespace Exports
                 dt.Rows.Add(dr)
             Next
 
-            ExcelCore.EnsureMessageRow(dt, "오류 없음")
+            ExcelCore.EnsureMessageRow(dt, "오류가 없습니다.")
 
             Return dt
         End Function

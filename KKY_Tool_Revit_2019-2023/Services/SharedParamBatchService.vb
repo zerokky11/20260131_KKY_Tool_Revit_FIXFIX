@@ -536,7 +536,7 @@ Namespace Services
                 Next
             Next
 
-            ExcelCore.EnsureMessageRow(dt, "오류 없음")
+            ExcelCore.EnsureMessageRow(dt, "오류가 없습니다.")
 
             Dim fileName As String = $"SharedParamBatch_{DateTime.Now:yyyyMMdd_HHmm}.xlsx"
             Dim saved As String = ExcelCore.PickAndSaveXlsx("Logs", dt, fileName, doAutoFit, "sharedparambatch:progress")

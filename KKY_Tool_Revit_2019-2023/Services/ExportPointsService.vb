@@ -126,7 +126,7 @@ Namespace Services
             })
 
             Dim dt As DataTable = BuildTable(headers, data)
-            ExcelCore.EnsureMessageRow(dt, "오류 없음")
+            ExcelCore.EnsureMessageRow(dt, "오류가 없습니다.")
             ExcelCore.SaveXlsx(outPath, "Points", dt, doAutoFit)
             ExcelExportStyleRegistry.ApplyStylesForKey("points", outPath, autoFit:=doAutoFit, excelMode:=If(doAutoFit, "normal", "fast"))
 
