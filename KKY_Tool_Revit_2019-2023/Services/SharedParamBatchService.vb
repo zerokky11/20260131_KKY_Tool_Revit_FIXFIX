@@ -495,9 +495,9 @@ Namespace Services
                 "GUID",
                 "바인딩",
                 "파라미터 그룹",
-                "카테고리",
                 "성공여부",
-                "메시지"
+                "메시지",
+                "Categories"
             }
             For Each h As String In headers
                 dt.Columns.Add(h)
@@ -529,14 +529,14 @@ Namespace Services
                     row("GUID") = p.GuidString
                     row("바인딩") = If(p.Settings IsNot Nothing AndAlso p.Settings.IsInstanceBinding, "Instance", "Type")
                     row("파라미터 그룹") = GetParamGroupLabel(If(p.Settings IsNot Nothing, p.Settings.ParamGroup, BuiltInParameterGroup.INVALID))
-                    row("카테고리") = FormatCategoryRefs(If(p.Settings IsNot Nothing, p.Settings.Categories, Nothing))
+                    row("Categories") = FormatCategoryRefs(If(p.Settings IsNot Nothing, p.Settings.Categories, Nothing))
                     row("성공여부") = status
                     row("메시지") = message
                     dt.Rows.Add(row)
                 Next
             Next
 
-            ExcelCore.EnsureMessageRow(dt, "오류가 없습니다.")
+            ExcelCore.EnsureNoDataRow(dt, "오류가 없습니다.", New String() {"Status", "Result", "결과"})
 
             Dim fileName As String = $"SharedParamBatch_{DateTime.Now:yyyyMMdd_HHmm}.xlsx"
             Dim saved As String = ExcelCore.PickAndSaveXlsx("Logs", dt, fileName, doAutoFit, "sharedparambatch:progress")

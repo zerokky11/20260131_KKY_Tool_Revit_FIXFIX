@@ -6,7 +6,7 @@ Namespace Exports
     Public Module PointsExport
 
         Private Sub EnsureMessageRow(table As DataTable)
-            ExcelCore.EnsureMessageRow(table, "오류가 없습니다.")
+            ExcelCore.EnsureNoDataRow(table, "오류가 없습니다.", New String() {"Status", "Result", "결과"})
         End Sub
 
         ' 저장 대화상자 사용

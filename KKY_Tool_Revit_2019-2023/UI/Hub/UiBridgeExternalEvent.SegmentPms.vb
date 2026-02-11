@@ -1,4 +1,4 @@
-Option Explicit On
+﻿Option Explicit On
 Option Strict On
 
 Imports System
@@ -553,6 +553,10 @@ Namespace UI.Hub
                         routingRows = BuildEmptyRows(routingHeaders)
                     End If
 
+                    If classRows Is Nothing OrElse classRows.Count = 0 Then classRows = BuildEmptyRows(classHeaders)
+                    If sizeRows Is Nothing OrElse sizeRows.Count = 0 Then sizeRows = BuildEmptyRows(sizeHeaders)
+                    If routingRows Is Nothing OrElse routingRows.Count = 0 Then routingRows = BuildEmptyRows(routingHeaders)
+
                     AddSheet(wb, "Pipe Segment Class검토", classRows, classHeaders, "segmentpms:progress", written, totalRowsCount, doAutoFit)
                     AddSheet(wb, "PMS vs Segment Size검토", sizeRows, sizeHeaders, "segmentpms:progress", written, totalRowsCount, doAutoFit)
                     AddSheet(wb, "Routing Class검토", routingRows, routingHeaders, "segmentpms:progress", written, totalRowsCount, doAutoFit)
@@ -773,6 +777,13 @@ Namespace UI.Hub
             If columns Is Nothing OrElse columns.Count = 0 Then Return list
             Dim row As New Dictionary(Of String, Object)(StringComparer.Ordinal)
             row(columns(0)) = "오류가 없습니다."
+            For Each c In columns
+                If String.Equals(c, "Result", StringComparison.OrdinalIgnoreCase) OrElse
+                   String.Equals(c, "Status", StringComparison.OrdinalIgnoreCase) OrElse
+                   c.Contains("검토") Then
+                    row(c) = "NO_DATA"
+                End If
+            Next
             list.Add(row)
             Return list
         End Function
