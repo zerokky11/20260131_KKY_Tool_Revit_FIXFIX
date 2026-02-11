@@ -1,4 +1,4 @@
-Option Explicit On
+﻿Option Explicit On
 Option Strict On
 
 Imports System.Data
@@ -20,13 +20,13 @@ Namespace Exports
             "NestedFamilyName",
             "NestedTypeName",
             "NestedCategory",
+            "NestedParamName",
             "TargetParamName",
             "ExpectedGuid",
             "FoundScope",
             "NestedParamGuid",
             "NestedParamDataType",
             "AssocHostParamName",
-            "HostParamGuid",
             "HostParamIsShared",
             "Issue",
             "Notes"
@@ -61,7 +61,9 @@ Namespace Exports
                     SaveCsv(filePath, table)
                 Else
                     Dim doAutoFit As Boolean = (Not fastExport) AndAlso autoFit
+                    Dim excelMode As String = If(fastExport, "fast", "normal")
                     ExcelCore.SaveXlsx(filePath, "FamilyLinkAudit", table, doAutoFit)
+                    ExcelExportStyleRegistry.ApplyStylesForKey("familylink", filePath, autoFit:=doAutoFit, excelMode:=excelMode)
                 End If
                 Return filePath
             End Using
@@ -81,24 +83,20 @@ Namespace Exports
                 dr("NestedFamilyName") = SafeStr(r.NestedFamilyName)
                 dr("NestedTypeName") = SafeStr(r.NestedTypeName)
                 dr("NestedCategory") = SafeStr(r.NestedCategory)
+                dr("NestedParamName") = SafeStr(r.NestedParamName)
                 dr("TargetParamName") = SafeStr(r.TargetParamName)
                 dr("ExpectedGuid") = SafeStr(r.ExpectedGuid)
                 dr("FoundScope") = SafeStr(r.FoundScope)
                 dr("NestedParamGuid") = SafeStr(r.NestedParamGuid)
                 dr("NestedParamDataType") = SafeStr(r.NestedParamDataType)
                 dr("AssocHostParamName") = SafeStr(r.AssocHostParamName)
-                dr("HostParamGuid") = SafeStr(r.HostParamGuid)
                 dr("HostParamIsShared") = SafeStr(r.HostParamIsShared)
                 dr("Issue") = SafeStr(r.Issue)
                 dr("Notes") = SafeStr(r.Notes)
                 dt.Rows.Add(dr)
             Next
 
-            If dt.Rows.Count = 0 Then
-                Dim dr = dt.NewRow()
-                dr("FileName") = "오류가 없습니다."
-                dt.Rows.Add(dr)
-            End If
+            ExcelCore.EnsureMessageRow(dt, "오류 없음")
 
             Return dt
         End Function

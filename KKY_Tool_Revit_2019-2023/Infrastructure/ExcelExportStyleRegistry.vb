@@ -1,6 +1,10 @@
 ﻿Imports System
 Imports System.Collections.Generic
 Imports System.Data
+Imports System.IO
+Imports NPOI.SS.UserModel
+Imports NPOI.SS.Util
+Imports NPOI.XSSF.UserModel
 
 Namespace Infrastructure
 
@@ -10,15 +14,18 @@ Namespace Infrastructure
 
         Private ReadOnly _resolvers As New Dictionary(Of String, RowStatusResolver)(StringComparer.OrdinalIgnoreCase)
 
-        ' Module에서는 Shared Sub New() 금지 → Sub New() 로
         Sub New()
-            ' 기본 규칙 등록 (필요하면 기능별로 Register로 덮어쓰기 가능)
             Register("connector", AddressOf ResolveConnector)
-            Register("connector diagnostics", AddressOf ResolveConnector)
+            Register("guid", AddressOf ResolveResultLike)
+            Register("paramprop", AddressOf ResolveResultLike)
+            Register("points", AddressOf ResolveResultLike)
+            Register("pms", AddressOf ResolveResultLike)
             Register("familylink", AddressOf ResolveIssueLike)
+            Register("sharedparambatch", AddressOf ResolveResultLike)
+
+            Register("connector diagnostics", AddressOf ResolveConnector)
             Register("familylinkaudit", AddressOf ResolveIssueLike)
             Register("family link audit", AddressOf ResolveIssueLike)
-
             Register("pms vs segment size검토", AddressOf ResolveResultLike)
             Register("pipe segment class검토", AddressOf ResolveResultLike)
             Register("routing class검토", AddressOf ResolveResultLike)
@@ -39,14 +46,135 @@ Namespace Infrastructure
                 Return SafeResolve(fn, row, table)
             End If
 
-            ' 시트명이 key로 등록되어있을 수도 있음
             If Not String.IsNullOrWhiteSpace(sheetNameOrKey) AndAlso _resolvers.TryGetValue(sheetNameOrKey.Trim(), fn) Then
                 Return SafeResolve(fn, row, table)
             End If
 
-            ' 최후: 범용 규칙
             Return ResolveGeneric(row, table)
         End Function
+
+        Public Sub ApplyStylesForKey(styleKey As String,
+                                     xlsxPath As String,
+                                     Optional sheetName As String = Nothing,
+                                     Optional autoFit As Boolean = True,
+                                     Optional excelMode As String = "normal")
+            If String.IsNullOrWhiteSpace(xlsxPath) Then Return
+            If Not File.Exists(xlsxPath) Then Return
+
+            Dim isFast As Boolean = String.Equals(excelMode, "fast", StringComparison.OrdinalIgnoreCase)
+            Dim doAutoFit As Boolean = (Not isFast) AndAlso autoFit
+
+            Using fs As New FileStream(xlsxPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)
+                Dim wb As IWorkbook = New XSSFWorkbook(fs)
+
+                Dim targetSheets As New List(Of ISheet)()
+                If Not String.IsNullOrWhiteSpace(sheetName) Then
+                    Dim sh = wb.GetSheet(sheetName)
+                    If sh IsNot Nothing Then targetSheets.Add(sh)
+                End If
+                If targetSheets.Count = 0 Then
+                    For i As Integer = 0 To wb.NumberOfSheets - 1
+                        Dim sh = wb.GetSheetAt(i)
+                        If sh IsNot Nothing Then targetSheets.Add(sh)
+                    Next
+                End If
+
+                For Each sh In targetSheets
+                    ApplySheetStyleByKey(wb, sh, styleKey, doAutoFit)
+                Next
+
+                fs.Close()
+                Using outFs As New FileStream(xlsxPath, FileMode.Create, FileAccess.Write, FileShare.None)
+                    wb.Write(outFs)
+                End Using
+            End Using
+        End Sub
+
+        Private Sub ApplySheetStyleByKey(wb As IWorkbook, sh As ISheet, styleKey As String, doAutoFit As Boolean)
+            Dim header = sh.GetRow(0)
+            If header Is Nothing Then Return
+            Dim colCount As Integer = CInt(header.LastCellNum)
+            If colCount <= 0 Then Return
+
+            Dim headerStyle As ICellStyle = ExcelStyleHelper.GetHeaderStyleNoWrap(wb)
+            For c As Integer = 0 To colCount - 1
+                Dim cell = header.GetCell(c)
+                If cell Is Nothing Then
+                    cell = header.CreateCell(c)
+                    cell.SetCellValue("")
+                End If
+                cell.CellStyle = headerStyle
+            Next
+
+            Dim range As New CellRangeAddress(0, Math.Max(1, sh.LastRowNum), 0, colCount - 1)
+            Try
+                sh.CreateFreezePane(0, 1)
+            Catch
+            End Try
+            Try
+                sh.SetAutoFilter(range)
+            Catch
+            End Try
+
+            For r As Integer = 1 To sh.LastRowNum
+                Dim row = sh.GetRow(r)
+                If row Is Nothing Then Continue For
+                row.Height = -1
+                Dim status = ResolveRowStatusFromSheet(sh, styleKey, row, colCount)
+                Dim rowStyle = ExcelStyleHelper.GetRowStyleNoWrap(wb, status)
+                If rowStyle IsNot Nothing Then
+                    ExcelStyleHelper.ApplyStyleToRow(row, colCount, rowStyle)
+                Else
+                    ApplyBorderForRow(wb, row, colCount)
+                End If
+            Next
+
+            If doAutoFit Then
+                For c As Integer = 0 To colCount - 1
+                    Try
+                        sh.AutoSizeColumn(c)
+                    Catch
+                    End Try
+                Next
+            End If
+        End Sub
+
+        Private Function ResolveRowStatusFromSheet(sh As ISheet, styleKey As String, row As IRow, colCount As Integer) As ExcelStyleHelper.RowStatus
+            Dim dt As New DataTable("tmp")
+            For c As Integer = 0 To colCount - 1
+                Dim headCell = sh.GetRow(0).GetCell(c)
+                Dim hn As String = If(headCell Is Nothing, $"Col{c + 1}", headCell.ToString())
+                If String.IsNullOrWhiteSpace(hn) Then hn = $"Col{c + 1}"
+                If dt.Columns.Contains(hn) Then hn = hn & "_" & c.ToString()
+                dt.Columns.Add(hn)
+            Next
+            Dim dr = dt.NewRow()
+            For c As Integer = 0 To colCount - 1
+                Dim cell = row.GetCell(c)
+                dr(c) = If(cell Is Nothing, "", cell.ToString())
+            Next
+            dt.Rows.Add(dr)
+            Return Resolve(If(String.IsNullOrWhiteSpace(styleKey), sh.SheetName, styleKey), dr, dt)
+        End Function
+
+        Private Sub ApplyBorderForRow(wb As IWorkbook, row As IRow, colCount As Integer)
+            For c As Integer = 0 To colCount - 1
+                Dim cell = row.GetCell(c)
+                If cell Is Nothing Then
+                    cell = row.CreateCell(c)
+                    cell.SetCellValue("")
+                End If
+                Dim src = cell.CellStyle
+                Dim st = wb.CreateCellStyle()
+                If src IsNot Nothing Then st.CloneStyleFrom(src)
+                st.BorderBottom = BorderStyle.Thin
+                st.BorderTop = BorderStyle.Thin
+                st.BorderLeft = BorderStyle.Thin
+                st.BorderRight = BorderStyle.Thin
+                st.WrapText = False
+                cell.CellStyle = st
+            Next
+        End Sub
 
         Private Function SafeResolve(fn As RowStatusResolver, row As DataRow, table As DataTable) As ExcelStyleHelper.RowStatus
             Try
@@ -59,70 +187,67 @@ Namespace Infrastructure
         Private Function NormalizeKey(sheetNameOrKey As String) As String
             If String.IsNullOrWhiteSpace(sheetNameOrKey) Then Return ""
             Dim s = sheetNameOrKey.Trim().ToLowerInvariant()
-
             If s.Contains("connector") Then Return "connector"
-            If s.Contains("familylink") OrElse s.Contains("family link") Then Return "familylinkaudit"
-            If s.Contains("pms") OrElse s.Contains("segment") Then Return s ' PMS 시트는 시트명 그대로도 등록해둠
-
+            If s.Contains("guid") Then Return "guid"
+            If s.Contains("param") Then Return "paramprop"
+            If s.Contains("point") Then Return "points"
+            If s.Contains("sharedparambatch") Then Return "sharedparambatch"
+            If s.Contains("familylink") OrElse s.Contains("family link") Then Return "familylink"
+            If s.Contains("pms") OrElse s.Contains("segment") Then Return "pms"
             Return s
         End Function
 
-        ' ---- 기능별 기본 Resolver들 ----
-
         Private Function ResolveConnector(row As DataRow, table As DataTable) As ExcelStyleHelper.RowStatus
-            Dim statusText = GetColText(row, table, "Status")
+            Dim statusText = GetFirstExistingText(row, table, "Status", "Result", "검토결과")
             If IsOkLike(statusText) Then Return ExcelStyleHelper.RowStatus.None
-
             If LooksError(statusText) Then Return ExcelStyleHelper.RowStatus.[Error]
             Return ExcelStyleHelper.RowStatus.Warning
         End Function
 
         Private Function ResolveIssueLike(row As DataRow, table As DataTable) As ExcelStyleHelper.RowStatus
-            Dim issue = GetColText(row, table, "Issue")
+            Dim issue = GetFirstExistingText(row, table, "Issue", "Result", "Status")
             If IsOkLike(issue) Then Return ExcelStyleHelper.RowStatus.None
             If LooksError(issue) Then Return ExcelStyleHelper.RowStatus.[Error]
             Return ExcelStyleHelper.RowStatus.Warning
         End Function
 
         Private Function ResolveResultLike(row As DataRow, table As DataTable) As ExcelStyleHelper.RowStatus
-            Dim result = GetColText(row, table, "Result")
+            Dim result = GetFirstExistingText(row, table, "Result", "Res", "Status", "성공여부", "검토결과", "Class검토결과", "Class검토")
             If IsOkLike(result) Then Return ExcelStyleHelper.RowStatus.None
             If LooksError(result) Then Return ExcelStyleHelper.RowStatus.[Error]
+            If String.IsNullOrWhiteSpace(result) Then Return ExcelStyleHelper.RowStatus.Info
             Return ExcelStyleHelper.RowStatus.Warning
         End Function
 
         Private Function ResolveGeneric(row As DataRow, table As DataTable) As ExcelStyleHelper.RowStatus
-            Dim candidates = New String() {
-                "Status", "Result", "Issue",
-                "Class검토결과", "Class검토", "검토결과",
-                "Error", "ErrorMessage", "Notes"
-            }
-
-            Dim txt As String = ""
-            For Each c In candidates
-                txt = GetColText(row, table, c)
-                If Not String.IsNullOrWhiteSpace(txt) Then Exit For
-            Next
-
+            Dim txt = GetFirstExistingText(row, table, "Status", "Result", "Issue", "Error", "ErrorMessage", "Notes")
             If String.IsNullOrWhiteSpace(txt) Then Return ExcelStyleHelper.RowStatus.None
             If IsOkLike(txt) Then Return ExcelStyleHelper.RowStatus.None
             If LooksError(txt) Then Return ExcelStyleHelper.RowStatus.[Error]
             Return ExcelStyleHelper.RowStatus.Warning
         End Function
 
-        ' ---- 헬퍼 ----
+        Private Function GetFirstExistingText(row As DataRow, table As DataTable, ParamArray colNames() As String) As String
+            For Each c In colNames
+                Dim t = GetColText(row, table, c)
+                If Not String.IsNullOrWhiteSpace(t) Then Return t
+            Next
+            Return ""
+        End Function
 
         Private Function GetColText(row As DataRow, table As DataTable, colName As String) As String
-            If table.Columns.Contains(colName) Then
-                Dim v = row(colName)
-                If v Is Nothing OrElse v Is DBNull.Value Then Return ""
-                Return v.ToString().Trim()
-            End If
+            For Each col As DataColumn In table.Columns
+                If String.Equals(col.ColumnName, colName, StringComparison.OrdinalIgnoreCase) Then
+                    Dim v = row(col)
+                    If v Is Nothing OrElse v Is DBNull.Value Then Return ""
+                    Return v.ToString().Trim()
+                End If
+            Next
             Return ""
         End Function
 
         Private Function IsOkLike(s As String) As Boolean
-            If String.IsNullOrWhiteSpace(s) Then Return True
+            If String.IsNullOrWhiteSpace(s) Then Return False
             Dim t = s.Trim().ToLowerInvariant()
             If t = "ok" OrElse t = "pass" OrElse t = "success" Then Return True
             If t.Contains("오류 없음") OrElse t.Contains("정상") OrElse t.Contains("이상 없음") Then Return True
@@ -132,17 +257,11 @@ Namespace Infrastructure
         Private Function LooksError(s As String) As Boolean
             If String.IsNullOrWhiteSpace(s) Then Return False
             Dim t = s.Trim().ToLowerInvariant()
-            ' Connector: mismatch는 오류(강조)로 처리
             If t.Contains("mismatch") OrElse t.Contains("불일치") Then Return True
             If t.Contains("error") OrElse t.Contains("fail") Then Return True
             If t.Contains("실패") OrElse t.Contains("오류") Then Return True
             Return False
         End Function
-
-        ' ConnectorExport 등에서 호출 중일 수 있는 호환용 (저장 시 이미 스타일을 먹이므로 no-op)
-        Public Sub ApplyStylesForKey(styleKey As String, xlsxPath As String)
-            ' intentionally no-op
-        End Sub
 
     End Module
 

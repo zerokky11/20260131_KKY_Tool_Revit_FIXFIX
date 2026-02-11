@@ -338,3 +338,19 @@
     grid-template-columns: 1fr;
   }
 }
+
+.sharedparambatch-input,
+.sharedparambatch-select {
+  color-scheme: light dark;
+}
+
+.sharedparambatch-select option {
+  background: var(--surface-main);
+  color: var(--text-main);
+}
+
+.sharedparambatch-input:focus,
+.sharedparambatch-select:focus {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 1px;
+}

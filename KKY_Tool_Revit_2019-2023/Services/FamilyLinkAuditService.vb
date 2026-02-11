@@ -1,4 +1,4 @@
-Option Explicit On
+﻿Option Explicit On
 Option Strict On
 
 Imports System
@@ -25,6 +25,7 @@ Namespace Services
         Public Property NestedFamilyName As String = ""
         Public Property NestedTypeName As String = ""
         Public Property NestedCategory As String = ""
+        Public Property NestedParamName As String = ""
         Public Property TargetParamName As String = ""
         Public Property ExpectedGuid As String = ""
         Public Property FoundScope As String = ""
@@ -234,6 +235,7 @@ Namespace Services
                                 .NestedFamilyName = nestedFam.Name,
                                 .NestedTypeName = SafeStr(fi.Symbol.Name),
                                 .NestedCategory = nestedCat,
+                                .NestedParamName = "",
                                 .TargetParamName = targetName,
                                 .ExpectedGuid = expected.Guid.ToString("D"),
                                 .Issue = FamilyLinkAuditIssue.ParamNotFound.ToString(),
@@ -264,7 +266,8 @@ Namespace Services
                                     .NestedFamilyName = nestedFam.Name,
                                     .NestedTypeName = SafeStr(fi.Symbol.Name),
                                     .NestedCategory = nestedCat,
-                                    .TargetParamName = targetName,
+                                    .NestedParamName = SafeStr(p.Definition.Name),
+                                .TargetParamName = targetName,
                                     .ExpectedGuid = expected.Guid.ToString("D"),
                                     .FoundScope = fp.Scope.ToString(),
                                     .NestedParamGuid = nestedGuidStr,
@@ -322,6 +325,7 @@ Namespace Services
                                 .NestedFamilyName = nestedFam.Name,
                                 .NestedTypeName = SafeStr(fi.Symbol.Name),
                                 .NestedCategory = nestedCat,
+                                .NestedParamName = SafeStr(p.Definition.Name),
                                 .TargetParamName = targetName,
                                 .ExpectedGuid = expected.Guid.ToString("D"),
                                 .FoundScope = fp.Scope.ToString(),

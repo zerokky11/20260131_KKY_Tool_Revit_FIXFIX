@@ -173,13 +173,14 @@ Namespace UI.Hub
                     sheetList.Add(New KeyValuePair(Of String, DataTable)("RVT 검토결과", projectTable))
                 End If
 
-                Dim requestedAutoFit As Boolean = String.Equals(excelMode, "normal", StringComparison.OrdinalIgnoreCase)
-                LogAutoFitDecision(requestedAutoFit, "GuidAuditExport")
-                Dim saved = GuidAuditService.ExportMulti(sheetList, excelMode, "guid:progress")
+                Dim doAutoFit As Boolean = ParseExcelMode(payload)
+                LogAutoFitDecision(doAutoFit, "GuidAuditExport")
+                Dim saved = GuidAuditService.ExportMulti(sheetList, If(String.Equals(excelMode, "fast", StringComparison.OrdinalIgnoreCase), "fast", If(doAutoFit, "normal", "manual")), "guid:progress")
                 If String.IsNullOrWhiteSpace(saved) Then
                     SendToWeb("guid:error", New With {.message = "엑셀 내보내기가 취소되었습니다."})
                     Return
                 End If
+                Infrastructure.ExcelExportStyleRegistry.ApplyStylesForKey("guid", saved, autoFit:=doAutoFit, excelMode:=If(String.Equals(excelMode, "fast", StringComparison.OrdinalIgnoreCase), "fast", "normal"))
                 SendToWeb("guid:exported", New With {.path = saved, .which = which})
             Catch ex As Exception
                 SendToWeb("guid:error", New With {.message = "엑셀 내보내기 실패: " & ex.Message})

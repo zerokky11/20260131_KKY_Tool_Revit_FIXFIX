@@ -1,4 +1,4 @@
-Imports System
+﻿Imports System
 Imports System.Collections
 Imports System.Collections.Generic
 Imports System.Data
@@ -986,13 +986,10 @@ Namespace Services
                     Next
                 End If
 
-                If dt.Rows.Count = 0 Then
-                    Dim row = dt.NewRow()
-                    row(0) = "오류가 없습니다."
-                    dt.Rows.Add(row)
-                End If
+                Infrastructure.ExcelCore.EnsureMessageRow(dt, "오류 없음")
 
                 Infrastructure.ExcelCore.SaveXlsx(sfd.FileName, "Results", dt, doAutoFit, "paramprop:progress")
+                Infrastructure.ExcelExportStyleRegistry.ApplyStylesForKey("paramprop", sfd.FileName, autoFit:=doAutoFit, excelMode:=If(doAutoFit, "normal", "fast"))
                 Return sfd.FileName
             End Using
         End Function

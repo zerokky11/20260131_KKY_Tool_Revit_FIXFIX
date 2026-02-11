@@ -4,6 +4,7 @@ import { post, onHost } from '../core/bridge.js';
 import { createRvtTable, renderRvtRows, getRvtName } from './rvtTable.js';
 
 const DEFAULT_SUMMARY = { okCount: 0, failCount: 0, skipCount: 0 };
+const CATEGORY_PRESET_KEY = "kky_spb_category_presets_v1";
 
 export function renderSharedParamBatch(root) {
   const target = root || document.getElementById('view-root') || document.getElementById('app');
@@ -32,7 +33,8 @@ export function renderSharedParamBatch(root) {
     logs: [],
     logTextPath: '',
     running: false,
-    lastProgressPct: 0
+    lastProgressPct: 0,
+    categoryFilterText: ''
   };
 
   const page = div('feature-shell sharedparambatch-page');
@@ -765,6 +767,47 @@ export function renderSharedParamBatch(root) {
     categoryActions.append(btnAll, btnClear, btnClearChildren);
     categoryRow.append(categoryActions);
 
+    const categoryFilter = document.createElement('input');
+    categoryFilter.type = 'text';
+    categoryFilter.className = 'sharedparambatch-input';
+    categoryFilter.placeholder = 'Category 검색';
+    categoryFilter.value = state.categoryFilterText || '';
+    categoryFilter.addEventListener('input', () => {
+      state.categoryFilterText = categoryFilter.value || '';
+      const modalNow = buildSettingsModal;
+      if (modalNow.body) renderCategoryTree(modalNow.body.querySelector('.sharedparambatch-category-tree'), param);
+    });
+    categoryRow.append(categoryFilter);
+
+    const presetRow = div('sharedparambatch-category-actions');
+    const presetSelect = document.createElement('select');
+    presetSelect.className = 'sharedparambatch-select';
+    const presets = loadCategoryPresets();
+    const defaultOpt = document.createElement('option');
+    defaultOpt.value = '';
+    defaultOpt.textContent = 'Category 프리셋 불러오기';
+    presetSelect.append(defaultOpt);
+    Object.keys(presets).sort().forEach((name) => {
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name;
+      presetSelect.append(opt);
+    });
+    presetSelect.addEventListener('change', () => {
+      if (!presetSelect.value) return;
+      applyCategoryPreset(param, presetSelect.value);
+      const modalNow = buildSettingsModal;
+      if (modalNow.body) renderCategoryTree(modalNow.body.querySelector('.sharedparambatch-category-tree'), param);
+    });
+    const btnSavePreset = cardBtn('프리셋 저장', () => {
+      const name = prompt('프리셋 이름을 입력하세요.');
+      if (!name) return;
+      saveCategoryPreset(name, param.settings.categories || []);
+      openSettingsModal(modal.currentIndex);
+    }, 'btn--secondary');
+    presetRow.append(presetSelect, btnSavePreset);
+    categoryRow.append(presetRow);
+
     const treeWrap = div('sharedparambatch-category-tree');
     renderCategoryTree(treeWrap, param);
     categoryRow.append(treeWrap);
@@ -801,12 +844,27 @@ export function renderSharedParamBatch(root) {
       return;
     }
     const selected = new Set(param.settings.categories.map(c => c.path || c.name));
+    const keyword = (state.categoryFilterText || '').trim().toLowerCase();
     const list = document.createElement('ul');
     list.className = 'sharedparambatch-tree';
-    state.categoryTree.forEach((node) => list.append(buildCategoryNode(node)));
+    state.categoryTree.forEach((node) => {
+      const built = buildCategoryNode(node, keyword);
+      if (built) list.append(built);
+    });
     container.append(list);
 
-    function buildCategoryNode(node) {
+    function buildCategoryNode(node, keyword) {
+      const nameText = String(node.name || '').toLowerCase();
+      const childMatches = [];
+      if (node.children && node.children.length) {
+        node.children.forEach((child) => {
+          const cnode = buildCategoryNode(child, keyword);
+          if (cnode) childMatches.push(cnode);
+        });
+      }
+      const selfMatch = !keyword || nameText.includes(keyword);
+      if (!selfMatch && childMatches.length === 0) return null;
+
       const li = document.createElement('li');
       const row = div('sharedparambatch-tree-row');
       if (node.isBindable) {
@@ -827,10 +885,10 @@ export function renderSharedParamBatch(root) {
       row.append(label);
       li.append(row);
 
-      if (node.children && node.children.length) {
+      if (childMatches.length) {
         const childList = document.createElement('ul');
         childList.className = 'sharedparambatch-tree';
-        node.children.forEach((child) => childList.append(buildCategoryNode(child)));
+        childMatches.forEach((child) => childList.append(child));
         li.append(childList);
       }
       return li;
@@ -885,6 +943,31 @@ export function renderSharedParamBatch(root) {
       if (depth >= 1 && n.isBindable) out.add(n.path || n.name);
       if (n.children && n.children.length) collectBindableWithDepth(n.children, out, depth + 1);
     });
+  }
+
+
+  function loadCategoryPresets() {
+    try {
+      const raw = localStorage.getItem(CATEGORY_PRESET_KEY) || '{}';
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+
+  function saveCategoryPreset(name, categories) {
+    const key = String(name || '').trim();
+    if (!key) return;
+    const presets = loadCategoryPresets();
+    presets[key] = (categories || []).map((c) => ({ idInt: c.idInt, name: c.name, path: c.path }));
+    try { localStorage.setItem(CATEGORY_PRESET_KEY, JSON.stringify(presets)); } catch {}
+  }
+
+  function applyCategoryPreset(param, name) {
+    const presets = loadCategoryPresets();
+    const rows = Array.isArray(presets[name]) ? presets[name] : [];
+    param.settings.categories = rows.map((c) => ({ idInt: c.idInt, name: c.name, path: c.path }));
   }
 
   function sectionHeader(title, buttons) {

@@ -1,4 +1,4 @@
-Option Explicit On
+﻿Option Explicit On
 Option Strict On
 
 Imports System
@@ -495,6 +495,7 @@ Namespace Services
                 "GUID",
                 "바인딩",
                 "파라미터 그룹",
+                "카테고리",
                 "성공여부",
                 "메시지"
             }
@@ -528,20 +529,20 @@ Namespace Services
                     row("GUID") = p.GuidString
                     row("바인딩") = If(p.Settings IsNot Nothing AndAlso p.Settings.IsInstanceBinding, "Instance", "Type")
                     row("파라미터 그룹") = GetParamGroupLabel(If(p.Settings IsNot Nothing, p.Settings.ParamGroup, BuiltInParameterGroup.INVALID))
+                    row("카테고리") = FormatCategoryRefs(If(p.Settings IsNot Nothing, p.Settings.Categories, Nothing))
                     row("성공여부") = status
                     row("메시지") = message
                     dt.Rows.Add(row)
                 Next
             Next
 
-            If dt.Rows.Count = 0 Then
-                Dim row = dt.NewRow()
-                row(0) = "오류가 없습니다."
-                dt.Rows.Add(row)
-            End If
+            ExcelCore.EnsureMessageRow(dt, "오류 없음")
 
             Dim fileName As String = $"SharedParamBatch_{DateTime.Now:yyyyMMdd_HHmm}.xlsx"
             Dim saved As String = ExcelCore.PickAndSaveXlsx("Logs", dt, fileName, doAutoFit, "sharedparambatch:progress")
+            If Not String.IsNullOrWhiteSpace(saved) Then
+                ExcelExportStyleRegistry.ApplyStylesForKey("sharedparambatch", saved, autoFit:=doAutoFit, excelMode:=If(doAutoFit, "normal", "fast"))
+            End If
             If String.IsNullOrWhiteSpace(saved) Then
                 Return New With {.ok = False, .message = "엑셀 내보내기가 취소되었습니다."}
             End If
@@ -621,6 +622,17 @@ Namespace Services
             Next
 
             Return map
+        End Function
+
+        Private Shared Function FormatCategoryRefs(categories As List(Of CategoryRef)) As String
+            If categories Is Nothing OrElse categories.Count = 0 Then Return ""
+            Dim names = categories.
+                Select(Function(c) If(c Is Nothing, "", If(Not String.IsNullOrWhiteSpace(c.Name), c.Name, c.Path))).
+                Where(Function(x) Not String.IsNullOrWhiteSpace(x)).
+                Select(Function(x) $"[{x}]").
+                Distinct(StringComparer.OrdinalIgnoreCase).
+                ToArray()
+            Return String.Join(",", names)
         End Function
 
         Private Shared Function NormalizeStatus(level As String) As String

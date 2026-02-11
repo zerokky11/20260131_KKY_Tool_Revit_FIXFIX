@@ -6,12 +6,7 @@ Namespace Exports
     Public Module PointsExport
 
         Private Sub EnsureMessageRow(table As DataTable)
-            If table Is Nothing Then Return
-            If table.Rows.Count > 0 Then Return
-            If table.Columns.Count = 0 Then Return
-            Dim dr = table.NewRow()
-            dr(0) = "오류가 없습니다."
-            table.Rows.Add(dr)
+            ExcelCore.EnsureMessageRow(table, "오류 없음")
         End Sub
 
         ' 저장 대화상자 사용

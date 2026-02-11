@@ -1,4 +1,4 @@
-Option Explicit On
+﻿Option Explicit On
 Option Strict On
 
 Imports System
@@ -153,7 +153,9 @@ Namespace UI.Hub
             End If
 
             Dim fastExport As Boolean = ExtractBool(payload, "fastExport", True)
-            Dim autoFit As Boolean = ExtractBool(payload, "autoFit", False)
+            Dim autoFit As Boolean = ParseExcelMode(payload)
+            If ExtractBool(payload, "fastExport", False) Then autoFit = False
+            fastExport = Not autoFit
 
             Try
                 Dim savedPath As String = FamilyLinkAuditExport.Export(_familyLinkLastRows, fastExport, autoFit)

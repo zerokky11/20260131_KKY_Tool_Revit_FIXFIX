@@ -193,6 +193,18 @@ Namespace Infrastructure
             Next
         End Sub
 
+
+        Public Sub EnsureMessageRow(table As DataTable,
+                                    Optional message As String = "오류 없음")
+            If table Is Nothing Then Return
+            If table.Columns.Count = 0 Then Return
+            If table.Rows.Count > 0 Then Return
+
+            Dim row = table.NewRow()
+            row(0) = If(String.IsNullOrWhiteSpace(message), "오류 없음", message)
+            table.Rows.Add(row)
+        End Sub
+
         Public Sub SaveCsv(filePath As String, table As DataTable)
             If String.IsNullOrWhiteSpace(filePath) Then Throw New ArgumentNullException(NameOf(filePath))
             If table Is Nothing Then Throw New ArgumentNullException(NameOf(table))

@@ -1,4 +1,4 @@
-Option Explicit On
+﻿Option Explicit On
 Option Strict On
 
 Imports System
@@ -169,6 +169,7 @@ Namespace Services
             Catch
                 doAutoFit = False
             End Try
+            ExcelCore.EnsureMessageRow(table, "오류 없음")
             Return ExcelCore.PickAndSaveXlsx(sheetName, table, $"{sheetName}_{DateTime.Now:yyyyMMdd_HHmm}.xlsx", doAutoFit, progressChannel)
         End Function
 
@@ -185,6 +186,9 @@ Namespace Services
             Catch
                 doAutoFit = False
             End Try
+            For Each kv In sheets
+                ExcelCore.EnsureMessageRow(kv.Value, "오류 없음")
+            Next
             Dim fileName As String = $"GuidAudit_{DateTime.Now:yyyyMMdd_HHmm}.xlsx"
             Return ExcelCore.PickAndSaveXlsxMulti(sheets, fileName, doAutoFit, progressChannel)
         End Function
@@ -199,13 +203,7 @@ Namespace Services
                 Next
             End If
 
-            If exportTable.Rows.Count = 0 Then
-                Dim row = exportTable.NewRow()
-                If exportTable.Columns.Count > 0 Then
-                    row(0) = "오류가 없습니다."
-                End If
-                exportTable.Rows.Add(row)
-            End If
+            ExcelCore.EnsureMessageRow(exportTable, "오류 없음")
 
             Return exportTable
         End Function
@@ -553,6 +551,8 @@ Namespace Services
                     dt.Columns.Add("RvtPath", GetType(String))
                     dt.Columns.Add("ParamName", GetType(String))
                     dt.Columns.Add("ParamKind", GetType(String))
+                    dt.Columns.Add("ParamGroup", GetType(String))
+                    dt.Columns.Add("Categories", GetType(String))
                     dt.Columns.Add("RvtGuid", GetType(String))
                     dt.Columns.Add("FileGuid", GetType(String))
                     dt.Columns.Add("Result", GetType(String))
@@ -582,6 +582,8 @@ Namespace Services
                 If dt.Columns.Contains("FamilyCategory") Then r("FamilyCategory") = ""
                 If dt.Columns.Contains("ParamName") Then r("ParamName") = ""
                 If dt.Columns.Contains("ParamKind") Then r("ParamKind") = ""
+                If dt.Columns.Contains("ParamGroup") Then r("ParamGroup") = ""
+                If dt.Columns.Contains("Categories") Then r("Categories") = ""
                 If dt.Columns.Contains("RvtGuid") Then r("RvtGuid") = ""
                 If dt.Columns.Contains("IsShared") Then r("IsShared") = ""
                 If dt.Columns.Contains("FamilyGuid") Then r("FamilyGuid") = ""
@@ -602,6 +604,8 @@ Namespace Services
                 dt.Columns.Add("RvtPath", GetType(String))
                 dt.Columns.Add("ParamName", GetType(String))
                 dt.Columns.Add("ParamKind", GetType(String))
+                dt.Columns.Add("ParamGroup", GetType(String))
+                dt.Columns.Add("Categories", GetType(String))
                 dt.Columns.Add("RvtGuid", GetType(String))
                 dt.Columns.Add("FileGuid", GetType(String))
                 dt.Columns.Add("Result", GetType(String))
@@ -737,6 +741,8 @@ Namespace Services
                     r("RvtPath") = If(rvtPath, "")
                     r("ParamName") = name
                     r("ParamKind") = kind
+                    r("ParamGroup") = SafeParameterGroupName(def)
+                    r("Categories") = FormatBindingCategories(binding)
                     r("RvtGuid") = projGuid
                     r("FileGuid") = fileGuid
                     r("Result") = result
@@ -751,6 +757,36 @@ Namespace Services
                 If String.IsNullOrWhiteSpace(existing) Then Return note
                 If String.IsNullOrWhiteSpace(note) Then Return existing
                 Return existing & "; " & note
+            End Function
+
+            Private Shared Function SafeParameterGroupName(def As Definition) As String
+                Try
+                    Dim idef = TryCast(def, InternalDefinition)
+                    If idef IsNot Nothing Then
+                        Return idef.ParameterGroup.ToString()
+                    End If
+                Catch
+                End Try
+                Return ""
+            End Function
+
+            Private Shared Function FormatBindingCategories(binding As ElementBinding) As String
+                If binding Is Nothing OrElse binding.Categories Is Nothing Then Return ""
+                Dim names As New List(Of String)()
+                For Each cat As Category In binding.Categories
+                    If cat Is Nothing Then Continue For
+                    Dim n As String = SafeStr(cat.Name)
+                    If String.IsNullOrWhiteSpace(n) Then Continue For
+                    names.Add($"[{n}]")
+                    Try
+                        For Each subCat As Category In cat.SubCategories
+                            Dim sn As String = SafeStr(subCat.Name)
+                            If Not String.IsNullOrWhiteSpace(sn) Then names.Add($"[{sn}]")
+                        Next
+                    Catch
+                    End Try
+                Next
+                Return String.Join(",", names.Distinct(StringComparer.OrdinalIgnoreCase).ToArray())
             End Function
 
             Public Shared Function RunFamilyAudit(doc As Document,
