@@ -775,12 +775,12 @@ Namespace Services
                 Dim names As New List(Of String)()
                 For Each cat As Category In binding.Categories
                     If cat Is Nothing Then Continue For
-                    Dim n As String = SafeStr(cat.Name)
+                    Dim n As String = If(cat.Name, "")
                     If String.IsNullOrWhiteSpace(n) Then Continue For
                     names.Add($"[{n}]")
                     Try
                         For Each subCat As Category In cat.SubCategories
-                            Dim sn As String = SafeStr(subCat.Name)
+                            Dim sn As String = If(subCat.Name, "")
                             If Not String.IsNullOrWhiteSpace(sn) Then names.Add($"[{sn}]")
                         Next
                     Catch

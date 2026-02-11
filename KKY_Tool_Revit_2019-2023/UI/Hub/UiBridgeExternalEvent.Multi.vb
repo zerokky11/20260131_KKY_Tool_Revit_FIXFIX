@@ -536,6 +536,7 @@ NextItem:
         End Sub
 
         Private Sub ExportGuid(excelMode As String)
+            Dim doAutoFit As Boolean = String.Equals(excelMode, "normal", StringComparison.OrdinalIgnoreCase)
             If _multiGuidProject Is Nothing Then
                 SendToWeb("hub:multi-exported", New With {.ok = False, .message = "GUID 결과가 없습니다."})
                 Return
