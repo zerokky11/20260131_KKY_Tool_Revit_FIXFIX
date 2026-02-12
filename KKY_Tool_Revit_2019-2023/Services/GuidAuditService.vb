@@ -649,6 +649,8 @@ Namespace Services
                 dt.Columns.Add("Result", GetType(String))
                 dt.Columns.Add("Notes", GetType(String))
 
+                Dim allowedCategoryNames As HashSet(Of String) = BuildAllowedCategoryNameSet(doc)
+
                 Dim speByName As New Dictionary(Of String, List(Of Guid))(StringComparer.OrdinalIgnoreCase)
                 Try
                     For Each spe As SharedParameterElement In New FilteredElementCollector(doc).OfClass(GetType(SharedParameterElement)).Cast(Of SharedParameterElement)()
@@ -780,13 +782,17 @@ Namespace Services
                     r("ParamName") = name
                     r("ParamKind") = kind
                     r("ParamGroup") = SafeParameterGroupName(def)
-                    r("BoundCategories") = FormatBoundCategories(binding)
+                    r("BoundCategories") = FormatBoundCategories(binding, allowedCategoryNames)
                     r("RvtGuid") = projGuid
                     r("FileGuid") = fileGuid
                     r("Result") = result
                     r("Notes") = notes
                     dt.Rows.Add(r)
                 End While
+
+                If dt.Columns.Contains("BoundCategories") Then
+                    dt.Columns("BoundCategories").SetOrdinal(dt.Columns.Count - 1)
+                End If
 
                 Return dt
             End Function
@@ -814,31 +820,106 @@ Namespace Services
                 Return ""
             End Function
 
-            Private Shared Function FormatBoundCategories(binding As ElementBinding) As String
+            Private Shared Function FormatBoundCategories(binding As ElementBinding,
+                                                          allowedCategoryNames As HashSet(Of String)) As String
                 If binding Is Nothing OrElse binding.Categories Is Nothing Then Return ""
+                If allowedCategoryNames Is Nothing OrElse allowedCategoryNames.Count = 0 Then Return ""
 
                 Dim names As New List(Of String)()
                 For Each cat As Category In binding.Categories
                     If cat Is Nothing Then Continue For
 
+                    Dim name As String = ""
                     Try
-                        If cat.Parent IsNot Nothing Then Continue For
+                        name = If(cat.Name, "")
                     Catch
+                        name = ""
                     End Try
-
-                    Dim name As String = If(cat.Name, "")
                     If String.IsNullOrWhiteSpace(name) Then Continue For
-                    names.Add(name.Trim())
+                    Dim trimmedName As String = name.Trim()
+
+                    Dim include As Boolean = allowedCategoryNames.Contains(trimmedName)
+                    If Not include Then
+                        Try
+                            Dim parent As Category = cat.Parent
+                            If parent IsNot Nothing Then
+                                Dim parentName As String = If(parent.Name, "").Trim()
+                                If Not String.IsNullOrWhiteSpace(parentName) AndAlso allowedCategoryNames.Contains(parentName) Then
+                                    include = True
+                                End If
+                            End If
+                        Catch
+                        End Try
+                    End If
+
+                    If include Then
+                        names.Add(trimmedName)
+                    End If
                 Next
 
-                Dim sortedTopLevelNames = names.
+                Dim sortedNames = names.
                     Distinct(StringComparer.OrdinalIgnoreCase).
                     OrderBy(Function(x) x, StringComparer.OrdinalIgnoreCase).
                     Select(Function(x) $"[{x}]").
                     ToArray()
 
-                Return String.Join(",", sortedTopLevelNames)
+                Return String.Join(",", sortedNames)
             End Function
+
+            Private Shared Function BuildAllowedCategoryNameSet(doc As Document) As HashSet(Of String)
+                Dim result As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
+                If doc Is Nothing Then Return result
+
+                Dim cats As Categories = Nothing
+                Try
+                    cats = doc.Settings.Categories
+                Catch
+                    cats = Nothing
+                End Try
+                If cats Is Nothing Then Return result
+
+                For Each cat As Category In cats
+                    AddAllowedCategoryName(cat, result)
+
+                    Try
+                        Dim subs As CategoryNameMap = cat.SubCategories
+                        If subs IsNot Nothing Then
+                            For Each subCat As Category In subs
+                                AddAllowedCategoryName(subCat, result)
+                            Next
+                        End If
+                    Catch
+                    End Try
+                Next
+
+                Return result
+            End Function
+
+            Private Shared Sub AddAllowedCategoryName(cat As Category, allowedNames As HashSet(Of String))
+                If cat Is Nothing OrElse allowedNames Is Nothing Then Return
+
+                Dim name As String = ""
+                Try
+                    name = If(cat.Name, "")
+                Catch
+                    name = ""
+                End Try
+                If String.IsNullOrWhiteSpace(name) Then Return
+
+                Dim trimmed As String = name.Trim()
+                If trimmed.StartsWith("<", StringComparison.OrdinalIgnoreCase) Then Return
+                If trimmed.IndexOf("line style", StringComparison.OrdinalIgnoreCase) >= 0 Then Return
+
+                Dim canBind As Boolean = False
+                Try
+                    canBind = cat.AllowsBoundParameters
+                Catch
+                    canBind = False
+                End Try
+                If Not canBind Then Return
+
+                allowedNames.Add(trimmed)
+            End Sub
 
             Public Shared Function RunFamilyAudit(doc As Document,
                                                   fileMap As Dictionary(Of String, List(Of Guid)),
