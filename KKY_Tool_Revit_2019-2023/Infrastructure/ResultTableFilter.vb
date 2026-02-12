@@ -5,7 +5,7 @@ Imports System
 Imports System.Collections.Generic
 Imports System.Data
 
-Namespace KKY_Tool_Revit.Infrastructure
+Namespace Infrastructure
 
     Public Module ResultTableFilter
 
