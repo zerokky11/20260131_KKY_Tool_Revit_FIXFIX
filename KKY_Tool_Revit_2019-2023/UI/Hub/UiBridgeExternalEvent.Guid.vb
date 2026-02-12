@@ -106,8 +106,8 @@ Namespace UI.Hub
                                                End Sub,
                                                includeFamily:=includeFamily,
                                                includeAnnotation:=includeAnnotation)
-                _guidProject = Infrastructure.ExcelExportStyleRegistry.FilterIssueRows("guid", res.Project)
-                _guidFamilyDetail = Infrastructure.ExcelExportStyleRegistry.FilterIssueRows("guid", res.FamilyDetail)
+                _guidProject = FilterIssueRowsCopy("guid", res.Project)
+                _guidFamilyDetail = FilterIssueRowsCopy("guid", res.FamilyDetail)
                 _guidFamilyIndex = res.FamilyIndex
                 _guidRunId = res.RunId
                 _guidIncludeFamily = res.IncludeFamily

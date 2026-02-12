@@ -905,9 +905,9 @@ NextItem:
 
         Private Sub MergeGuidResult(res As GuidAuditService.RunResult)
             If res Is Nothing Then Return
-            _multiGuidProject = MergeTable(_multiGuidProject, Infrastructure.ExcelExportStyleRegistry.FilterIssueRows("guid", res.Project))
+            _multiGuidProject = MergeTable(_multiGuidProject, FilterIssueRowsCopy("guid", res.Project))
             If res.IncludeFamily Then
-                _multiGuidFamilyDetail = MergeTable(_multiGuidFamilyDetail, Infrastructure.ExcelExportStyleRegistry.FilterIssueRows("guid", res.FamilyDetail))
+                _multiGuidFamilyDetail = MergeTable(_multiGuidFamilyDetail, FilterIssueRowsCopy("guid", res.FamilyDetail))
                 _multiGuidFamilyIndex = MergeTable(_multiGuidFamilyIndex, res.FamilyIndex)
             End If
         End Sub
@@ -917,7 +917,7 @@ NextItem:
             If source.Count = 0 Then Return source
 
             Dim table As DataTable = DictListToDataTable(source, "ReviewRows")
-            Dim filtered As DataTable = Infrastructure.ExcelExportStyleRegistry.FilterIssueRows(styleKey, table)
+            Dim filtered As DataTable = FilterIssueRowsCopy(styleKey, table)
             Return DataTableToObjects(filtered)
         End Function
 

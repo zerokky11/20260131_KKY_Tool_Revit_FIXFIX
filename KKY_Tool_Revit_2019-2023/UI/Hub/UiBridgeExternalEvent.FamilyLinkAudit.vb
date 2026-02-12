@@ -149,7 +149,7 @@ Namespace UI.Hub
             If rows Is Nothing Then Return New List(Of FamilyLinkAuditRow)()
 
             Dim table As DataTable = FamilyLinkAuditExport.ToDataTable(rows)
-            Dim filteredTable As DataTable = Infrastructure.ExcelExportStyleRegistry.FilterIssueRows("familylink", table)
+            Dim filteredTable As DataTable = FilterIssueRowsCopy("familylink", table)
 
             Dim result As New List(Of FamilyLinkAuditRow)()
             If filteredTable Is Nothing Then Return result

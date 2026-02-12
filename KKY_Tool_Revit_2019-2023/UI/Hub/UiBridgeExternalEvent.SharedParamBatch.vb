@@ -1,4 +1,4 @@
-Option Explicit On
+﻿Option Explicit On
 Option Strict On
 
 Imports System
@@ -107,7 +107,7 @@ Namespace UI.Hub
                 index += 1
             Next
 
-            Dim filtered As Data.DataTable = Infrastructure.ExcelExportStyleRegistry.FilterIssueRows("sharedparambatch", dt)
+            Dim filtered As Data.DataTable = FilterIssueRowsCopy("sharedparambatch", dt)
             Dim result As New List(Of SharedParamBatchService.LogEntry)()
             If filtered Is Nothing Then Return result
 

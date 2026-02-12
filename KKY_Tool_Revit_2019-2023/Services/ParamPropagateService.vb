@@ -994,7 +994,7 @@ Namespace Services
                     Next
                 End If
 
-                dt = Infrastructure.ExcelExportStyleRegistry.FilterIssueRows("paramprop", dt)
+                Global.KKY_Tool_Revit.Infrastructure.ResultTableFilter.KeepOnlyIssues("paramprop", dt)
 
                 EnsureParamPropExportSchema(dt)
                 Infrastructure.ExcelCore.EnsureNoDataRow(dt, "오류가 없습니다.")

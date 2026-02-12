@@ -3,6 +3,7 @@ Option Strict On
 
 Imports System
 Imports System.Collections.Generic
+Imports System.Data
 Imports System.Diagnostics
 Imports System.IO
 Imports System.Reflection
@@ -263,6 +264,13 @@ Namespace UI.Hub
             End Try
 
             Return Not String.Equals(mode, "fast", StringComparison.OrdinalIgnoreCase)
+        End Function
+
+        Friend Shared Function FilterIssueRowsCopy(styleKey As String, table As DataTable) As DataTable
+            If table Is Nothing Then Return Nothing
+            Dim copy As DataTable = table.Copy()
+            Global.KKY_Tool_Revit.Infrastructure.ResultTableFilter.KeepOnlyIssues(styleKey, copy)
+            Return copy
         End Function
 
         ' payload 속성 안전 추출(익명/Dictionary 수용)

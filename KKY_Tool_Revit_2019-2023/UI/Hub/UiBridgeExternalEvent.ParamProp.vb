@@ -152,7 +152,7 @@ Namespace UI.Hub
                 dt.Rows.Add(row)
             Next
 
-            Dim filtered As DataTable = Infrastructure.ExcelExportStyleRegistry.FilterIssueRows("paramprop", dt)
+            Dim filtered As DataTable = FilterIssueRowsCopy("paramprop", dt)
             Dim result As New List(Of ParamPropagateService.SharedParamDetailRow)()
             If filtered Is Nothing Then Return result
 
