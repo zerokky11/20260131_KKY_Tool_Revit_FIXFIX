@@ -233,6 +233,8 @@ Namespace Services
                 Next
             End If
 
+            ResultTableFilter.KeepOnlyIssues("guid", exportTable)
+
             If exportTable.Columns.Contains("RvtPath") Then
                 exportTable.Columns.Remove("RvtPath")
             End If
@@ -825,45 +827,64 @@ Namespace Services
                 If binding Is Nothing OrElse binding.Categories Is Nothing Then Return ""
                 If allowedCategoryNames Is Nothing OrElse allowedCategoryNames.Count = 0 Then Return ""
 
-                Dim names As New List(Of String)()
+                Dim topLevelNames As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
+                Dim subByTop As New Dictionary(Of String, HashSet(Of String))(StringComparer.OrdinalIgnoreCase)
+
                 For Each cat As Category In binding.Categories
                     If cat Is Nothing Then Continue For
 
-                    Dim name As String = ""
-                    Try
-                        name = If(cat.Name, "")
-                    Catch
-                        name = ""
-                    End Try
-                    If String.IsNullOrWhiteSpace(name) Then Continue For
-                    Dim trimmedName As String = name.Trim()
+                    Dim currentName As String = SafeCategoryName(cat)
+                    If String.IsNullOrWhiteSpace(currentName) Then Continue For
 
-                    Dim include As Boolean = allowedCategoryNames.Contains(trimmedName)
-                    If Not include Then
-                        Try
-                            Dim parent As Category = cat.Parent
-                            If parent IsNot Nothing Then
-                                Dim parentName As String = If(parent.Name, "").Trim()
-                                If Not String.IsNullOrWhiteSpace(parentName) AndAlso allowedCategoryNames.Contains(parentName) Then
-                                    include = True
-                                End If
-                            End If
-                        Catch
-                        End Try
+                    Dim parent As Category = Nothing
+                    Try
+                        parent = cat.Parent
+                    Catch
+                        parent = Nothing
+                    End Try
+
+                    If parent Is Nothing Then
+                        If allowedCategoryNames.Contains(currentName) Then
+                            topLevelNames.Add(currentName)
+                        End If
+                        Continue For
                     End If
 
-                    If include Then
-                        names.Add(trimmedName)
+                    Dim parentName As String = SafeCategoryName(parent)
+                    If String.IsNullOrWhiteSpace(parentName) Then Continue For
+                    If Not allowedCategoryNames.Contains(parentName) Then Continue For
+
+                    topLevelNames.Add(parentName)
+                    If Not subByTop.ContainsKey(parentName) Then
+                        subByTop(parentName) = New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
+                    End If
+                    subByTop(parentName).Add(currentName)
+                Next
+
+                Dim labels As New List(Of String)()
+                For Each top In topLevelNames.OrderBy(Function(x) x, StringComparer.OrdinalIgnoreCase)
+                    labels.Add($"[{top}]")
+
+                    Dim subs As HashSet(Of String) = Nothing
+                    If subByTop.TryGetValue(top, subs) AndAlso subs IsNot Nothing Then
+                        For Each subName In subs.OrderBy(Function(x) x, StringComparer.OrdinalIgnoreCase)
+                            labels.Add($"[{top}: {subName}]")
+                        Next
                     End If
                 Next
 
-                Dim sortedNames = names.
-                    Distinct(StringComparer.OrdinalIgnoreCase).
-                    OrderBy(Function(x) x, StringComparer.OrdinalIgnoreCase).
-                    Select(Function(x) $"[{x}]").
-                    ToArray()
+                Return String.Join(",", labels.ToArray())
+            End Function
 
-                Return String.Join(",", sortedNames)
+            Private Shared Function SafeCategoryName(cat As Category) As String
+                If cat Is Nothing Then Return ""
+                Try
+                    Dim name As String = If(cat.Name, "")
+                    If String.IsNullOrWhiteSpace(name) Then Return ""
+                    Return name.Trim()
+                Catch
+                    Return ""
+                End Try
             End Function
 
             Private Shared Function BuildAllowedCategoryNameSet(doc As Document) As HashSet(Of String)

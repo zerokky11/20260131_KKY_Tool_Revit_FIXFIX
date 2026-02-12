@@ -259,6 +259,7 @@ Namespace Infrastructure
             If String.IsNullOrWhiteSpace(s) Then Return False
             Dim t = s.Trim().ToLowerInvariant()
             If t = "ok" OrElse t = "pass" OrElse t = "success" Then Return True
+            If t.StartsWith("ok(") OrElse t.StartsWith("ok[") OrElse t.StartsWith("ok_") Then Return True
             If t.Contains("오류 없음") OrElse t.Contains("정상") OrElse t.Contains("이상 없음") Then Return True
             Return False
         End Function
