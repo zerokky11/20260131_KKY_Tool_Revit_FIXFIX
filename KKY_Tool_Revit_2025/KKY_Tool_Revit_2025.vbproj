@@ -127,6 +127,9 @@
 		<Compile Include="..\KKY_Tool_Revit_2019-2023\Infrastructure\ExcelExportStyleRegistry.vb">
 			<Link>Infrastructure\ExcelExportStyleRegistry.vb</Link>
 		</Compile>
+		<Compile Include="..\KKY_Tool_Revit_2019-2023\Infrastructure\ResultTableFilter.vb">
+			<Link>Infrastructure\ResultTableFilter.vb</Link>
+		</Compile>
 		<Compile Include="..\KKY_Tool_Revit_2019-2023\Infrastructure\ElementIdCompat.vb">
 			<Link>Infrastructure\ElementIdCompat.vb</Link>
 		</Compile>
