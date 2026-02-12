@@ -448,7 +448,7 @@ Namespace UI.Hub
                 ReportExportProgress("EXCEL_WRITE", "엑셀 데이터 작성", totalRows, totalRows, 1.0, True)
                 ReportExportProgress("EXCEL_SAVE", "엑셀 파일 내보내기", totalRows, totalRows, 1.0, True)
 
-                Global.KKY_Tool_Revit.Infrastructure.ExcelCore.SaveXlsx(path, "Export", dt, doAutoFit, sheetKey:="Export", progressKey:="export:progress")
+                Global.KKY_Tool_Revit.Infrastructure.ExcelCore.SaveXlsx(path, "Export", dt, doAutoFit, sheetKey:="Export", progressKey:="export:progress", exportKind:="points")
                 Global.KKY_Tool_Revit.Infrastructure.ExcelExportStyleRegistry.ApplyStylesForKey("points", path, autoFit:=doAutoFit, excelMode:=excelMode)
 
                 Dim autoFitMessage As String = If(doAutoFit, "AutoFit 적용", "빠른 모드: AutoFit 생략")

@@ -5,23 +5,18 @@ Namespace Exports
 
     Public Module PointsExport
 
-        Private Sub EnsureMessageRow(table As DataTable)
-            ExcelCore.EnsureNoDataRow(table, "오류가 없습니다.")
-        End Sub
 
         ' 저장 대화상자 사용
         Public Function SaveWithDialog(resultTable As DataTable) As String
             If resultTable Is Nothing Then Return String.Empty
-            EnsureMessageRow(resultTable)
-            Return ExcelCore.PickAndSaveXlsx("Exported Points", resultTable, "ExportPoints.xlsx")
+            Return ExcelCore.PickAndSaveXlsx("Exported Points", resultTable, "ExportPoints.xlsx", exportKind:="points")
         End Function
 
         ' 경로 지정 저장
         Public Sub Save(outPath As String, resultTable As DataTable)
             If resultTable Is Nothing Then Exit Sub
-            EnsureMessageRow(resultTable)
             ' 일부 레거시에서는 SaveXlsx(filePath, table) 시그니처를 사용함 → ExcelCore 오버로드로 흡수
-            ExcelCore.SaveXlsx(outPath, "Exported Points", resultTable)
+            ExcelCore.SaveXlsx(outPath, "Exported Points", resultTable, exportKind:="points")
         End Sub
 
     End Module

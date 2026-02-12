@@ -55,7 +55,9 @@ Namespace Infrastructure
             If table Is Nothing Then Throw New ArgumentNullException(NameOf(table))
 
             EnsureDir(filePath)
-            EnsureNoDataRow(table)
+            If Not IsPointsExportKind(exportKind) Then
+                EnsureNoDataRow(table)
+            End If
 
             Using wb As IWorkbook = New XSSFWorkbook()
                 Dim safeSheet = NormalizeSheetName(If(sheetName, "Sheet1"))
@@ -195,6 +197,14 @@ Namespace Infrastructure
             Next
         End Sub
 
+
+        Private Function IsPointsExportKind(exportKind As String) As Boolean
+            If String.IsNullOrWhiteSpace(exportKind) Then Return False
+            Dim key As String = exportKind.Trim()
+            Return key.Equals("points", StringComparison.OrdinalIgnoreCase) OrElse
+                   key.Equals("exportpoints", StringComparison.OrdinalIgnoreCase) OrElse
+                   key.Equals("export/points", StringComparison.OrdinalIgnoreCase)
+        End Function
 
         Public Sub EnsureNoDataRow(table As DataTable,
                                    Optional message As String = "오류가 없습니다.")
