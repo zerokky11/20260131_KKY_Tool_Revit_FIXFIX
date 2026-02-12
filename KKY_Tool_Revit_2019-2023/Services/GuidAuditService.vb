@@ -8,6 +8,7 @@ Imports System.IO
 Imports System.Linq
 Imports System.Reflection
 Imports System.Text.RegularExpressions
+Imports System.Windows.Forms
 Imports Autodesk.Revit.DB
 Imports Autodesk.Revit.UI
 Imports KKY_Tool_Revit.Infrastructure
@@ -170,7 +171,14 @@ Namespace Services
                 doAutoFit = False
             End Try
             ExcelCore.EnsureMessageRow(table, "오류가 없습니다.")
-            Return ExcelCore.PickAndSaveXlsx(sheetName, table, $"{sheetName}_{DateTime.Now:yyyyMMdd_HHmm}.xlsx", doAutoFit, progressChannel)
+
+            Using sfd As New SaveFileDialog()
+                sfd.Filter = "Excel Workbook (*.xlsx)|*.xlsx"
+                sfd.FileName = $"{sheetName}_{DateTime.Now:yyyyMMdd_HHmm}.xlsx"
+                If sfd.ShowDialog() <> DialogResult.OK Then Return String.Empty
+                ExcelCore.SaveXlsx(sfd.FileName, sheetName, table, doAutoFit, sheetKey:=sheetName, progressKey:=progressChannel)
+                Return sfd.FileName
+            End Using
         End Function
 
         ''' <summary>엑셀 내보내기 (다중 시트)</summary>
@@ -189,8 +197,14 @@ Namespace Services
             For Each kv In sheets
                 ExcelCore.EnsureMessageRow(kv.Value, "오류가 없습니다.")
             Next
-            Dim fileName As String = $"GuidAudit_{DateTime.Now:yyyyMMdd_HHmm}.xlsx"
-            Return ExcelCore.PickAndSaveXlsxMulti(sheets, fileName, doAutoFit, progressChannel)
+
+            Using sfd As New SaveFileDialog()
+                sfd.Filter = "Excel Workbook (*.xlsx)|*.xlsx"
+                sfd.FileName = $"GuidAudit_{DateTime.Now:yyyyMMdd_HHmm}.xlsx"
+                If sfd.ShowDialog() <> DialogResult.OK Then Return String.Empty
+                ExcelCore.SaveXlsxMulti(sfd.FileName, sheets, doAutoFit, progressChannel)
+                Return sfd.FileName
+            End Using
         End Function
 
         Public Shared Function PrepareExportTable(source As DataTable, mode As Integer) As DataTable

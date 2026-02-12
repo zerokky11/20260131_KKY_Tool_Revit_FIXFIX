@@ -539,14 +539,18 @@ Namespace Services
             ExcelCore.EnsureNoDataRow(dt, "오류가 없습니다.")
 
             Dim fileName As String = $"SharedParamBatch_{DateTime.Now:yyyyMMdd_HHmm}.xlsx"
-            Dim saved As String = ExcelCore.PickAndSaveXlsx("Logs", dt, fileName, doAutoFit, "sharedparambatch:progress")
-            If Not String.IsNullOrWhiteSpace(saved) Then
-                ExcelExportStyleRegistry.ApplyStylesForKey("sharedparambatch", saved, autoFit:=doAutoFit, excelMode:=If(doAutoFit, "normal", "fast"))
-            End If
-            If String.IsNullOrWhiteSpace(saved) Then
-                Return New With {.ok = False, .message = "엑셀 내보내기가 취소되었습니다."}
-            End If
+            Dim saved As String = String.Empty
+            Using sfd As New WinForms.SaveFileDialog()
+                sfd.Filter = "Excel Workbook (*.xlsx)|*.xlsx"
+                sfd.FileName = fileName
+                If sfd.ShowDialog() <> WinForms.DialogResult.OK Then
+                    Return New With {.ok = False, .message = "엑셀 내보내기가 취소되었습니다."}
+                End If
+                saved = sfd.FileName
+            End Using
 
+            ExcelCore.SaveXlsx(saved, "Logs", dt, doAutoFit, sheetKey:="sharedparambatch", progressKey:="sharedparambatch:progress")
+            ExcelExportStyleRegistry.ApplyStylesForKey("sharedparambatch", saved, autoFit:=doAutoFit, excelMode:=If(doAutoFit, "normal", "fast"))
             Return New With {.ok = True, .filePath = saved}
         End Function
 
