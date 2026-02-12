@@ -566,7 +566,7 @@ Namespace Services
                     dt.Columns.Add("ParamName", GetType(String))
                     dt.Columns.Add("ParamKind", GetType(String))
                     dt.Columns.Add("ParamGroup", GetType(String))
-                    dt.Columns.Add("BindingCategories", GetType(String))
+                    dt.Columns.Add("BoundCategories", GetType(String))
                     dt.Columns.Add("RvtGuid", GetType(String))
                     dt.Columns.Add("FileGuid", GetType(String))
                     dt.Columns.Add("Result", GetType(String))
@@ -597,7 +597,7 @@ Namespace Services
                 If dt.Columns.Contains("ParamName") Then r("ParamName") = ""
                 If dt.Columns.Contains("ParamKind") Then r("ParamKind") = ""
                 If dt.Columns.Contains("ParamGroup") Then r("ParamGroup") = ""
-                If dt.Columns.Contains("BindingCategories") Then r("BindingCategories") = ""
+                If dt.Columns.Contains("BoundCategories") Then r("BoundCategories") = ""
                 If dt.Columns.Contains("RvtGuid") Then r("RvtGuid") = ""
                 If dt.Columns.Contains("IsShared") Then r("IsShared") = ""
                 If dt.Columns.Contains("FamilyGuid") Then r("FamilyGuid") = ""
@@ -619,7 +619,7 @@ Namespace Services
                 dt.Columns.Add("ParamName", GetType(String))
                 dt.Columns.Add("ParamKind", GetType(String))
                 dt.Columns.Add("ParamGroup", GetType(String))
-                dt.Columns.Add("BindingCategories", GetType(String))
+                dt.Columns.Add("BoundCategories", GetType(String))
                 dt.Columns.Add("RvtGuid", GetType(String))
                 dt.Columns.Add("FileGuid", GetType(String))
                 dt.Columns.Add("Result", GetType(String))
@@ -756,7 +756,7 @@ Namespace Services
                     r("ParamName") = name
                     r("ParamKind") = kind
                     r("ParamGroup") = SafeParameterGroupName(def)
-                    r("BindingCategories") = FormatBindingCategories(binding)
+                    r("BoundCategories") = FormatBoundCategories(binding)
                     r("RvtGuid") = projGuid
                     r("FileGuid") = fileGuid
                     r("Result") = result
@@ -790,7 +790,7 @@ Namespace Services
                 Return ""
             End Function
 
-            Private Shared Function FormatBindingCategories(binding As ElementBinding) As String
+            Private Shared Function FormatBoundCategories(binding As ElementBinding) As String
                 If binding Is Nothing OrElse binding.Categories Is Nothing Then Return ""
 
                 Dim names As New List(Of String)()

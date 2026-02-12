@@ -497,7 +497,7 @@ Namespace Services
                 "파라미터 그룹",
                 "성공여부",
                 "메시지",
-                "Categories"
+                "BoundCategories"
             }
             For Each h As String In headers
                 dt.Columns.Add(h)
@@ -529,7 +529,7 @@ Namespace Services
                     row("GUID") = p.GuidString
                     row("바인딩") = If(p.Settings IsNot Nothing AndAlso p.Settings.IsInstanceBinding, "Instance", "Type")
                     row("파라미터 그룹") = GetParamGroupLabel(If(p.Settings IsNot Nothing, p.Settings.ParamGroup, BuiltInParameterGroup.INVALID))
-                    row("Categories") = FormatCategoryRefs(If(p.Settings IsNot Nothing, p.Settings.Categories, Nothing))
+                    row("BoundCategories") = FormatCategoryRefs(If(p.Settings IsNot Nothing, p.Settings.Categories, Nothing))
                     row("성공여부") = status
                     row("메시지") = message
                     dt.Rows.Add(row)

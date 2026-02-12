@@ -994,6 +994,8 @@ Namespace Services
                     Next
                 End If
 
+
+                EnsureParamPropExportSchema(dt)
                 Infrastructure.ExcelCore.EnsureNoDataRow(dt, "오류가 없습니다.")
 
                 Infrastructure.ExcelCore.SaveXlsx(sfd.FileName, "Results", dt, doAutoFit, "paramprop:progress")
@@ -1001,6 +1003,28 @@ Namespace Services
                 Return sfd.FileName
             End Using
         End Function
+
+
+        Private Shared Sub EnsureParamPropExportSchema(dt As DataTable)
+            If dt Is Nothing Then Return
+
+            If dt.Columns.Contains("HostParamGuid") Then
+                dt.Columns.Remove("HostParamGuid")
+            End If
+
+            If Not dt.Columns.Contains("NestedParamName") Then
+                dt.Columns.Add("NestedParamName")
+            End If
+            If Not dt.Columns.Contains("TargetParamName") Then
+                dt.Columns.Add("TargetParamName")
+            End If
+
+            Try
+                dt.Columns("NestedParamName").SetOrdinal(If(dt.Columns.Contains("Family"), dt.Columns("Family").Ordinal + 1, 0))
+                dt.Columns("TargetParamName").SetOrdinal(dt.Columns("NestedParamName").Ordinal + 1)
+            Catch
+            End Try
+        End Sub
 
         Private Shared Sub ParseDetailParamNames(detailRow As SharedParamDetailRow,
                                                  ByRef nestedParamName As String,
