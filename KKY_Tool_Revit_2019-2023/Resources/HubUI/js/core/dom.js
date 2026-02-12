@@ -141,6 +141,7 @@ window.addEventListener('unhandledrejection', e => toast(`에러: ${e.reason}`,'
 
 // 엑셀 내보내기 모드 선택 (fast/normal)
 export function chooseExcelMode(onSelect){
+  return new Promise((resolve) => {
   const existing = document.querySelector('.excelmode-backdrop');
   if (existing) existing.remove();
   const backdrop = document.createElement('div');
@@ -162,7 +163,9 @@ export function chooseExcelMode(onSelect){
 
   const close = (mode) => {
     backdrop.remove();
-    if (typeof onSelect === 'function') onSelect(mode || 'fast');
+    const picked = mode || 'fast';
+    if (typeof onSelect === 'function') onSelect(picked);
+    resolve(picked);
   };
 
   const btnFast = document.createElement('button');
@@ -183,4 +186,5 @@ export function chooseExcelMode(onSelect){
   document.body.append(backdrop);
 
   backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close('fast'); });
+  });
 }

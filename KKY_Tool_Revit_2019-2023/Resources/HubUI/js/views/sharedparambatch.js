@@ -4,7 +4,7 @@ import { post, onHost } from '../core/bridge.js';
 import { createRvtTable, renderRvtRows, getRvtName } from './rvtTable.js';
 
 const DEFAULT_SUMMARY = { okCount: 0, failCount: 0, skipCount: 0 };
-const CATEGORY_PRESET_KEY = "kky_spb_category_presets_v1";
+const CATEGORY_PRESET_KEY = "kky_spb_cat_presets";
 
 export function renderSharedParamBatch(root) {
   const target = root || document.getElementById('view-root') || document.getElementById('app');
@@ -469,9 +469,10 @@ export function renderSharedParamBatch(root) {
     }
   }
 
-  function onExport() {
+  async function onExport() {
     if (!state.logs.length) { toast('내보낼 로그가 없습니다.', 'err'); return; }
-    chooseExcelMode((mode) => post('sharedparambatch:export-excel', { excelMode: mode || 'fast' }));
+    const excelMode = await chooseExcelMode();
+    post('sharedparambatch:export-excel', { excelMode: excelMode || 'fast' });
   }
 
   function handleExported(payload) {
@@ -770,7 +771,7 @@ export function renderSharedParamBatch(root) {
     const categoryFilter = document.createElement('input');
     categoryFilter.type = 'text';
     categoryFilter.className = 'sharedparambatch-input';
-    categoryFilter.placeholder = 'Category 검색';
+    categoryFilter.placeholder = '카테고리 검색…';
     categoryFilter.value = state.categoryFilterText || '';
     categoryFilter.addEventListener('input', () => {
       state.categoryFilterText = categoryFilter.value || '';
@@ -779,33 +780,64 @@ export function renderSharedParamBatch(root) {
     });
     categoryRow.append(categoryFilter);
 
-    const presetRow = div('sharedparambatch-category-actions');
+    const presetRow = div('sharedparambatch-preset-row');
     const presetSelect = document.createElement('select');
-    presetSelect.className = 'sharedparambatch-select';
+    presetSelect.className = 'sharedparambatch-select sharedparambatch-preset-select';
     const presets = loadCategoryPresets();
     const defaultOpt = document.createElement('option');
     defaultOpt.value = '';
-    defaultOpt.textContent = 'Category 프리셋 불러오기';
+    defaultOpt.textContent = '카테고리 프리셋 선택';
     presetSelect.append(defaultOpt);
-    Object.keys(presets).sort().forEach((name) => {
+    presets.map((p) => p.name).sort().forEach((name) => {
       const opt = document.createElement('option');
       opt.value = name;
       opt.textContent = name;
       presetSelect.append(opt);
     });
-    presetSelect.addEventListener('change', () => {
-      if (!presetSelect.value) return;
+
+    const presetNameInput = document.createElement('input');
+    presetNameInput.type = 'text';
+    presetNameInput.className = 'sharedparambatch-input sharedparambatch-preset-name';
+    presetNameInput.placeholder = '프리셋 이름';
+
+    const btnSavePreset = cardBtn('저장', () => {
+      const nextName = (presetNameInput.value || presetSelect.value || '').trim();
+      if (!nextName) {
+        toast('저장할 프리셋 이름을 입력하세요.', 'err');
+        return;
+      }
+      saveCategoryPreset(nextName, param.settings.categories || []);
+      openSettingsModal(modal.currentIndex);
+      toast(`프리셋 저장됨: ${nextName}`, 'ok');
+    }, 'btn--secondary');
+
+    const btnLoadPreset = cardBtn('불러오기', () => {
+      if (!presetSelect.value) {
+        toast('불러올 프리셋을 선택하세요.', 'err');
+        return;
+      }
       applyCategoryPreset(param, presetSelect.value);
       const modalNow = buildSettingsModal;
       if (modalNow.body) renderCategoryTree(modalNow.body.querySelector('.sharedparambatch-category-tree'), param);
-    });
-    const btnSavePreset = cardBtn('프리셋 저장', () => {
-      const name = prompt('프리셋 이름을 입력하세요.');
-      if (!name) return;
-      saveCategoryPreset(name, param.settings.categories || []);
-      openSettingsModal(modal.currentIndex);
+      toast(`프리셋 적용됨: ${presetSelect.value}`, 'ok');
     }, 'btn--secondary');
-    presetRow.append(presetSelect, btnSavePreset);
+
+    const btnDeletePreset = cardBtn('삭제', () => {
+      const presetName = (presetSelect.value || '').trim();
+      if (!presetName) {
+        toast('삭제할 프리셋을 선택하세요.', 'err');
+        return;
+      }
+      deleteCategoryPreset(presetName);
+      openSettingsModal(modal.currentIndex);
+      toast(`프리셋 삭제됨: ${presetName}`, 'ok');
+    }, 'btn--secondary');
+
+    presetSelect.addEventListener('change', () => {
+      presetNameInput.value = presetSelect.value || '';
+    });
+
+    presetRow.append(presetSelect, presetNameInput, btnSavePreset, btnLoadPreset, btnDeletePreset);
     categoryRow.append(presetRow);
 
     const treeWrap = div('sharedparambatch-category-tree');
@@ -948,26 +980,70 @@ export function renderSharedParamBatch(root) {
 
   function loadCategoryPresets() {
     try {
-      const raw = localStorage.getItem(CATEGORY_PRESET_KEY) || '{}';
+      const raw = localStorage.getItem(CATEGORY_PRESET_KEY) || '[]';
       const parsed = JSON.parse(raw);
-      return parsed && typeof parsed === 'object' ? parsed : {};
+      if (Array.isArray(parsed)) {
+        return parsed
+          .filter((row) => row && typeof row.name === 'string')
+          .map((row) => ({ name: row.name, ids: Array.isArray(row.ids) ? row.ids : [] }));
+      }
+      if (parsed && typeof parsed === 'object') {
+        return Object.keys(parsed).map((name) => {
+          const old = parsed[name];
+          if (Array.isArray(old)) {
+            return {
+              name,
+              ids: old.map((item) => item?.idInt).filter((id) => Number.isFinite(Number(id)))
+            };
+          }
+          return {
+            name,
+            ids: Array.isArray(old?.ids) ? old.ids : []
+          };
+        });
+      }
+      return [];
     } catch {
-      return {};
+      return [];
     }
+  }
+
+  function saveCategoryPresets(presets) {
+    const rows = Array.isArray(presets) ? presets : [];
+    try { localStorage.setItem(CATEGORY_PRESET_KEY, JSON.stringify(rows)); } catch {}
   }
 
   function saveCategoryPreset(name, categories) {
     const key = String(name || '').trim();
     if (!key) return;
     const presets = loadCategoryPresets();
-    presets[key] = (categories || []).map((c) => ({ idInt: c.idInt, name: c.name, path: c.path }));
-    try { localStorage.setItem(CATEGORY_PRESET_KEY, JSON.stringify(presets)); } catch {}
+    const next = {
+      name: key,
+      ids: (categories || []).map((c) => c.idInt).filter((id) => Number.isFinite(Number(id)))
+    };
+    const idx = presets.findIndex((p) => p.name === key);
+    if (idx >= 0) presets[idx] = next;
+    else presets.push(next);
+    saveCategoryPresets(presets);
   }
 
   function applyCategoryPreset(param, name) {
     const presets = loadCategoryPresets();
-    const rows = Array.isArray(presets[name]) ? presets[name] : [];
-    param.settings.categories = rows.map((c) => ({ idInt: c.idInt, name: c.name, path: c.path }));
+    const preset = presets.find((p) => p.name === name);
+    const ids = Array.isArray(preset?.ids) ? preset.ids : [];
+    const picked = [];
+    const idSet = new Set(ids.map((id) => Number(id)));
+    collectBindable(state.categoryTree, picked);
+    param.settings.categories = picked
+      .filter((cat) => idSet.has(Number(cat.idInt)))
+      .map((cat) => ({ idInt: cat.idInt, name: cat.name, path: cat.path }));
+  }
+
+  function deleteCategoryPreset(name) {
+    const key = String(name || '').trim();
+    if (!key) return;
+    const presets = loadCategoryPresets();
+    saveCategoryPresets(presets.filter((p) => p.name !== key));
   }
 
   function sectionHeader(title, buttons) {
