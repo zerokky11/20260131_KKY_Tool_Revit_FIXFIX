@@ -567,7 +567,6 @@ Namespace UI.Hub
             Return s
         End Function
 
-        <Obsolete>
         Private Shared Function SafeTypeName(e As Element, cache As Dictionary(Of Integer, String)) As String
             Dim fi = TryCast(e, FamilyInstance)
             If fi IsNot Nothing AndAlso fi.Symbol IsNot Nothing Then

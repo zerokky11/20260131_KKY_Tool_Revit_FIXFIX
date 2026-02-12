@@ -159,6 +159,7 @@ Namespace Services
                 Return String.Empty
             End Try
 #End If
+            Return String.Empty
         End Function
 
     End Module
