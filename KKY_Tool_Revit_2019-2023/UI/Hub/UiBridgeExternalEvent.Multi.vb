@@ -476,7 +476,7 @@ NextItem:
             End If
             Dim headers As List(Of String) = BuildConnectorHeaders(extras, uiUnit)
             Dim table = BuildConnectorTableFromRows(headers, exportRows)
-            ExcelCore.EnsureMessageRow(table, "오류가 없습니다.")
+            ExcelCore.EnsureNoDataRow(table, "오류가 없습니다.")
             If Not ValidateSchema(table, headers) Then Throw New InvalidOperationException("스키마 검증 실패: 커넥터")
             Dim saved = ExcelCore.PickAndSaveXlsx("Connector Diagnostics", table, $"Connector_{Date.Now:yyyyMMdd_HHmm}.xlsx", doAutoFit, "hub:multi-progress", "connector")
             If String.IsNullOrWhiteSpace(saved) Then
@@ -501,9 +501,9 @@ NextItem:
             Dim classTable = BuildTableFromRows(classHeaders, classRows)
             Dim sizeTable = BuildTableFromRows(sizeHeaders, sizeRows)
             Dim routingTable = BuildTableFromRows(routingHeaders, routingRows)
-            ExcelCore.EnsureMessageRow(classTable, "오류가 없습니다.")
-            ExcelCore.EnsureMessageRow(sizeTable, "오류가 없습니다.")
-            ExcelCore.EnsureMessageRow(routingTable, "오류가 없습니다.")
+            ExcelCore.EnsureNoDataRow(classTable, "오류가 없습니다.")
+            ExcelCore.EnsureNoDataRow(sizeTable, "오류가 없습니다.")
+            ExcelCore.EnsureNoDataRow(routingTable, "오류가 없습니다.")
 
             If totalRowsCount = 0 Then
                 AddEmptyMessageRow(classTable)
@@ -587,9 +587,8 @@ NextItem:
                 })
             Next
             Dim table = BuildPointTable(headers, rows)
-            ExcelCore.EnsureMessageRow(table, "오류가 없습니다.")
             If Not ValidateSchema(table, headers) Then Throw New InvalidOperationException("스키마 검증 실패: Points")
-            Dim saved = ExcelCore.PickAndSaveXlsx("Points", table, $"Points_{Date.Now:yyyyMMdd_HHmm}.xlsx", doAutoFit, "hub:multi-progress")
+            Dim saved = ExcelCore.PickAndSaveXlsx("Points", table, $"Points_{Date.Now:yyyyMMdd_HHmm}.xlsx", doAutoFit, "hub:multi-progress", "points")
             If String.IsNullOrWhiteSpace(saved) Then
                 SendToWeb("hub:multi-exported", New With {.ok = False, .message = "엑셀 저장이 취소되었습니다."})
             Else
@@ -877,7 +876,7 @@ NextItem:
         End Function
 
         Private Shared Sub AddEmptyMessageRow(table As DataTable)
-            ExcelCore.EnsureMessageRow(table, "오류가 없습니다.")
+            ExcelCore.EnsureNoDataRow(table, "오류가 없습니다.")
         End Sub
 
         Private Shared Function ValidateSchema(table As DataTable, headers As IList(Of String)) As Boolean
