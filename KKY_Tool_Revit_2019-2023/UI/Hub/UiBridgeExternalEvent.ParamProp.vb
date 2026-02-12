@@ -3,6 +3,7 @@ Option Strict On
 
 Imports System
 Imports System.Linq
+Imports System.Data
 Imports Autodesk.Revit.UI
 Imports KKY_Tool_Revit.Services
 
@@ -111,8 +112,9 @@ Namespace UI.Hub
                 responsePayload("status") = status.ToString().ToLowerInvariant()
                 responsePayload("message") = If(res IsNot Nothing, res.Message, Nothing)
                 If res IsNot Nothing Then
+                    Dim filteredDetails As List(Of ParamPropagateService.SharedParamDetailRow) = FilterParamPropIssueDetails(res.Details)
                     responsePayload("report") = res.Report
-                    responsePayload("details") = If(res.Details, New List(Of ParamPropagateService.SharedParamDetailRow)()).Select(Function(d) New With {
+                    responsePayload("details") = filteredDetails.Select(Function(d) New With {
                         .kind = d.Kind,
                         .family = d.Family,
                         .detail = d.Detail
@@ -133,6 +135,37 @@ Namespace UI.Hub
                 SendToWeb("revit:error", New With {.message = "공유 파라미터 연동 실패: " & ex.Message})
             End Try
         End Sub
+
+        Private Function FilterParamPropIssueDetails(details As List(Of ParamPropagateService.SharedParamDetailRow)) As List(Of ParamPropagateService.SharedParamDetailRow)
+            Dim src As List(Of ParamPropagateService.SharedParamDetailRow) = If(details, New List(Of ParamPropagateService.SharedParamDetailRow)())
+
+            Dim dt As New DataTable("ParamPropUi")
+            dt.Columns.Add("Type")
+            dt.Columns.Add("Family")
+            dt.Columns.Add("Detail")
+
+            For Each d In src
+                Dim row = dt.NewRow()
+                row("Type") = If(d Is Nothing, "", If(d.Kind, ""))
+                row("Family") = If(d Is Nothing, "", If(d.Family, ""))
+                row("Detail") = If(d Is Nothing, "", If(d.Detail, ""))
+                dt.Rows.Add(row)
+            Next
+
+            Dim filtered As DataTable = Infrastructure.ExcelExportStyleRegistry.FilterIssueRows("paramprop", dt)
+            Dim result As New List(Of ParamPropagateService.SharedParamDetailRow)()
+            If filtered Is Nothing Then Return result
+
+            For Each r As DataRow In filtered.Rows
+                result.Add(New ParamPropagateService.SharedParamDetailRow With {
+                    .Kind = Convert.ToString(r("Type")),
+                    .Family = Convert.ToString(r("Family")),
+                    .Detail = Convert.ToString(r("Detail"))
+                })
+            Next
+
+            Return result
+        End Function
 
         Private Sub ReportParamPropProgress(phase As String,
                                             phaseProgress As Double,

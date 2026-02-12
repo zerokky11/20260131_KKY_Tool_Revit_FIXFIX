@@ -488,8 +488,9 @@ Namespace UI.Hub
                 _segmentPmsLastResult = Nothing
                 Dim run = SegmentPmsCheckService.RunCompare(_extractData, _pmsRows, maps, opts)
                 _lastRunResult = run
-                _segmentPmsLastResult = New SegmentPmsResultCache With {.RunResult = run, .TotalCount = If(run.CompareTable Is Nothing, 0, run.CompareTable.Rows.Count)}
-                Dim compare = DataTableToObjects(run.CompareTable)
+                Dim filteredCompareTable As DataTable = Infrastructure.ExcelExportStyleRegistry.FilterIssueRows("pms", run.CompareTable)
+                _segmentPmsLastResult = New SegmentPmsResultCache With {.RunResult = run, .TotalCount = If(filteredCompareTable Is Nothing, 0, filteredCompareTable.Rows.Count)}
+                Dim compare = DataTableToObjects(filteredCompareTable)
                 Dim map = DataTableToObjects(run.MapTable)
                 Dim revitRaw = DataTableToObjects(run.RevitSizeTable)
                 Dim pmsRaw = DataTableToObjects(run.PmsSizeTable)
@@ -529,6 +530,7 @@ Namespace UI.Hub
                 End If
 
                 Dim compareRows = If(compareTable, DictListToDataTable(CoerceRowsToDictList(GetDictValue(pd, "compare")), "SizeCompare"))
+                compareRows = Infrastructure.ExcelExportStyleRegistry.FilterIssueRows("pms", compareRows)
                 Dim mapRows = If(mapTable, DictListToDataTable(CoerceRowsToDictList(GetDictValue(pd, "map")), "PipeTypeSegmentMap"))
 
                 Dim classRows = SegmentPmsCheckService.BuildClassCheckRows(mapRows)

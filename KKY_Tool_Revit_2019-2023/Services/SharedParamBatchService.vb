@@ -536,6 +536,7 @@ Namespace Services
                 Next
             Next
 
+            dt = ExcelExportStyleRegistry.FilterIssueRows("sharedparambatch", dt)
             ExcelCore.EnsureNoDataRow(dt, "오류가 없습니다.")
 
             Dim fileName As String = $"SharedParamBatch_{DateTime.Now:yyyyMMdd_HHmm}.xlsx"

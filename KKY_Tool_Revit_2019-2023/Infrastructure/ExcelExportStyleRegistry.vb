@@ -17,11 +17,11 @@ Namespace Infrastructure
         Sub New()
             Register("connector", AddressOf ResolveConnector)
             Register("guid", AddressOf ResolveResultLike)
-            Register("paramprop", AddressOf ResolveResultLike)
+            Register("paramprop", AddressOf ResolveParamProp)
             Register("points", AddressOf ResolveResultLike)
             Register("pms", AddressOf ResolveResultLike)
             Register("familylink", AddressOf ResolveIssueLike)
-            Register("sharedparambatch", AddressOf ResolveResultLike)
+            Register("sharedparambatch", AddressOf ResolveSharedParamBatch)
 
             Register("connector diagnostics", AddressOf ResolveConnector)
             Register("familylinkaudit", AddressOf ResolveIssueLike)
@@ -51,6 +51,19 @@ Namespace Infrastructure
             End If
 
             Return ResolveGeneric(row, table)
+        End Function
+
+        Public Function FilterIssueRows(styleKey As String, table As DataTable) As DataTable
+            If table Is Nothing Then Return Nothing
+
+            Dim filtered As DataTable = table.Clone()
+            For Each row As DataRow In table.Rows
+                Dim status As ExcelStyleHelper.RowStatus = Resolve(styleKey, row, table)
+                If status = ExcelStyleHelper.RowStatus.Warning OrElse status = ExcelStyleHelper.RowStatus.[Error] Then
+                    filtered.ImportRow(row)
+                End If
+            Next
+            Return filtered
         End Function
 
         Public Sub ApplyStylesForKey(styleKey As String,
@@ -150,6 +163,22 @@ Namespace Infrastructure
             If IsOkLike(result) Then Return ExcelStyleHelper.RowStatus.None
             If LooksError(result) Then Return ExcelStyleHelper.RowStatus.[Error]
             If String.IsNullOrWhiteSpace(result) Then Return ExcelStyleHelper.RowStatus.Info
+            Return ExcelStyleHelper.RowStatus.Warning
+        End Function
+
+        Private Function ResolveParamProp(row As DataRow, table As DataTable) As ExcelStyleHelper.RowStatus
+            Dim detail = GetFirstExistingText(row, table, "Detail", "Result", "Status", "메시지")
+            If String.IsNullOrWhiteSpace(detail) Then Return ExcelStyleHelper.RowStatus.None
+            If IsOkLike(detail) Then Return ExcelStyleHelper.RowStatus.None
+            If LooksError(detail) Then Return ExcelStyleHelper.RowStatus.[Error]
+            Return ExcelStyleHelper.RowStatus.Warning
+        End Function
+
+        Private Function ResolveSharedParamBatch(row As DataRow, table As DataTable) As ExcelStyleHelper.RowStatus
+            Dim status = GetFirstExistingText(row, table, "성공여부", "Level", "Status", "Result", "메시지")
+            If IsOkLike(status) Then Return ExcelStyleHelper.RowStatus.None
+            If LooksError(status) Then Return ExcelStyleHelper.RowStatus.[Error]
+            If String.IsNullOrWhiteSpace(status) Then Return ExcelStyleHelper.RowStatus.None
             Return ExcelStyleHelper.RowStatus.Warning
         End Function
 

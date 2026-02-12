@@ -106,13 +106,13 @@ Namespace UI.Hub
                                                End Sub,
                                                includeFamily:=includeFamily,
                                                includeAnnotation:=includeAnnotation)
-                _guidProject = res.Project
-                _guidFamilyDetail = res.FamilyDetail
+                _guidProject = Infrastructure.ExcelExportStyleRegistry.FilterIssueRows("guid", res.Project)
+                _guidFamilyDetail = Infrastructure.ExcelExportStyleRegistry.FilterIssueRows("guid", res.FamilyDetail)
                 _guidFamilyIndex = res.FamilyIndex
                 _guidRunId = res.RunId
                 _guidIncludeFamily = res.IncludeFamily
 
-                Dim payloadProject As TablePayload = ShapeTable(res.Project, New HashSet(Of String)(StringComparer.OrdinalIgnoreCase) From {"RvtPath"})
+                Dim payloadProject As TablePayload = ShapeTable(_guidProject, New HashSet(Of String)(StringComparer.OrdinalIgnoreCase) From {"RvtPath"})
                 Dim payloadFamily As TablePayload = ShapeTable(res.FamilyIndex, Nothing)
 
                 Dim donePayload = New With {

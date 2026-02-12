@@ -359,7 +359,7 @@ NextItem:
                 Dim rows = FamilyLinkAuditService.RunOnDocument(doc, path, _multiRequest.FamilyLink.Targets, Nothing)
                 If rows IsNot Nothing Then
                     If _multiFamilyLinkRows Is Nothing Then _multiFamilyLinkRows = New List(Of FamilyLinkAuditRow)()
-                    _multiFamilyLinkRows.AddRange(rows)
+                    _multiFamilyLinkRows.AddRange(FilterFamilyLinkIssueRows(rows))
                 End If
                 ReportMultiProgress(CalcStepPercent(basePct, stepIndex, steps), "패밀리 연동 검토 완료", safeName)
             End If
@@ -898,19 +898,28 @@ NextItem:
             If _multiPmsClassRows Is Nothing Then _multiPmsClassRows = New List(Of Dictionary(Of String, Object))()
             If _multiPmsSizeRows Is Nothing Then _multiPmsSizeRows = New List(Of Dictionary(Of String, Object))()
             If _multiPmsRoutingRows Is Nothing Then _multiPmsRoutingRows = New List(Of Dictionary(Of String, Object))()
-            _multiPmsClassRows.AddRange(classRows)
-            _multiPmsSizeRows.AddRange(sizeRows)
-            _multiPmsRoutingRows.AddRange(routingRows)
+            _multiPmsClassRows.AddRange(FilterIssueRowsFromDict("pms", classRows))
+            _multiPmsSizeRows.AddRange(FilterIssueRowsFromDict("pms", sizeRows))
+            _multiPmsRoutingRows.AddRange(FilterIssueRowsFromDict("pms", routingRows))
         End Sub
 
         Private Sub MergeGuidResult(res As GuidAuditService.RunResult)
             If res Is Nothing Then Return
-            _multiGuidProject = MergeTable(_multiGuidProject, res.Project)
+            _multiGuidProject = MergeTable(_multiGuidProject, Infrastructure.ExcelExportStyleRegistry.FilterIssueRows("guid", res.Project))
             If res.IncludeFamily Then
-                _multiGuidFamilyDetail = MergeTable(_multiGuidFamilyDetail, res.FamilyDetail)
+                _multiGuidFamilyDetail = MergeTable(_multiGuidFamilyDetail, Infrastructure.ExcelExportStyleRegistry.FilterIssueRows("guid", res.FamilyDetail))
                 _multiGuidFamilyIndex = MergeTable(_multiGuidFamilyIndex, res.FamilyIndex)
             End If
         End Sub
+
+        Private Shared Function FilterIssueRowsFromDict(styleKey As String, rows As List(Of Dictionary(Of String, Object))) As List(Of Dictionary(Of String, Object))
+            Dim source As List(Of Dictionary(Of String, Object)) = If(rows, New List(Of Dictionary(Of String, Object))())
+            If source.Count = 0 Then Return source
+
+            Dim table As DataTable = DictListToDataTable(source, "ReviewRows")
+            Dim filtered As DataTable = Infrastructure.ExcelExportStyleRegistry.FilterIssueRows(styleKey, table)
+            Return DataTableToObjects(filtered)
+        End Function
 
         Private Shared Function MergeTable(master As DataTable, part As DataTable) As DataTable
             If part Is Nothing Then Return master

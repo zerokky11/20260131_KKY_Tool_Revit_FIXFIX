@@ -57,6 +57,9 @@ Namespace UI.Hub
                                                                               End Sub)
 
                 Dim res As SharedParamBatchService.RunResult = TryCast(SharedParamBatchService.Run(app, payloadJson, progress), SharedParamBatchService.RunResult)
+                If res IsNot Nothing Then
+                    res.Logs = FilterSharedParamBatchIssueLogs(res.Logs)
+                End If
                 _lastSharedParamBatchResult = res
 
                 If res Is Nothing Then
@@ -86,6 +89,42 @@ Namespace UI.Hub
                 SendToWeb("revit:error", New With {.message = "Shared Parameter Batch 실패: " & ex.Message})
             End Try
         End Sub
+
+        Private Shared Function FilterSharedParamBatchIssueLogs(logs As List(Of SharedParamBatchService.LogEntry)) As List(Of SharedParamBatchService.LogEntry)
+            Dim source As List(Of SharedParamBatchService.LogEntry) = If(logs, New List(Of SharedParamBatchService.LogEntry)())
+            Dim dt As New Data.DataTable("SharedParamBatchLogs")
+            dt.Columns.Add("__idx", GetType(Integer))
+            dt.Columns.Add("성공여부")
+            dt.Columns.Add("메시지")
+
+            Dim index As Integer = 0
+            For Each l In source
+                Dim row = dt.NewRow()
+                row("__idx") = index
+                row("성공여부") = If(l Is Nothing, "", If(l.Level, ""))
+                row("메시지") = If(l Is Nothing, "", If(l.Message, ""))
+                dt.Rows.Add(row)
+                index += 1
+            Next
+
+            Dim filtered As Data.DataTable = Infrastructure.ExcelExportStyleRegistry.FilterIssueRows("sharedparambatch", dt)
+            Dim result As New List(Of SharedParamBatchService.LogEntry)()
+            If filtered Is Nothing Then Return result
+
+            For Each row As Data.DataRow In filtered.Rows
+                Dim sourceIdx As Integer = -1
+                Try
+                    sourceIdx = Convert.ToInt32(row("__idx"))
+                Catch
+                    sourceIdx = -1
+                End Try
+                If sourceIdx >= 0 AndAlso sourceIdx < source.Count Then
+                    result.Add(source(sourceIdx))
+                End If
+            Next
+
+            Return result
+        End Function
 
         Private Sub HandleSharedParamBatchExportExcel(app As UIApplication, payload As Object)
             Try

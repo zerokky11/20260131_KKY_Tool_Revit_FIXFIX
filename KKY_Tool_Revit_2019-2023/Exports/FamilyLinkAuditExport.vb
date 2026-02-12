@@ -34,7 +34,7 @@ Namespace Exports
 
         Public Function Export(rows As IEnumerable(Of FamilyLinkAuditRow), Optional fastExport As Boolean = True, Optional autoFit As Boolean = False) As String
             If rows Is Nothing Then Return String.Empty
-            Dim table As DataTable = BuildTable(rows)
+            Dim table As DataTable = ToDataTable(rows)
             If Not ValidateSchema(table) Then
                 Throw New InvalidOperationException("스키마 검증 실패: 컬럼 순서/헤더가 규격과 다릅니다.")
             End If
@@ -67,6 +67,10 @@ Namespace Exports
                 End If
                 Return filePath
             End Using
+        End Function
+
+        Public Function ToDataTable(rows As IEnumerable(Of FamilyLinkAuditRow)) As DataTable
+            Return BuildTable(rows)
         End Function
 
         Private Function BuildTable(rows As IEnumerable(Of FamilyLinkAuditRow)) As DataTable
