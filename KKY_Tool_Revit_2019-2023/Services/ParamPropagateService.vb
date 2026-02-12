@@ -998,7 +998,7 @@ Namespace Services
                 EnsureParamPropExportSchema(dt)
                 Infrastructure.ExcelCore.EnsureNoDataRow(dt, "오류가 없습니다.")
 
-                Infrastructure.ExcelCore.SaveXlsx(sfd.FileName, "Results", dt, doAutoFit, "paramprop:progress")
+                Infrastructure.ExcelCore.SaveXlsx(sfd.FileName, "Results", dt, doAutoFit, sheetKey:="paramprop", progressKey:="paramprop:progress")
                 Infrastructure.ExcelExportStyleRegistry.ApplyStylesForKey("paramprop", sfd.FileName, autoFit:=doAutoFit, excelMode:=If(doAutoFit, "normal", "fast"))
                 Return sfd.FileName
             End Using
@@ -1020,8 +1020,15 @@ Namespace Services
             End If
 
             Try
-                dt.Columns("NestedParamName").SetOrdinal(If(dt.Columns.Contains("Family"), dt.Columns("Family").Ordinal + 1, 0))
-                dt.Columns("TargetParamName").SetOrdinal(dt.Columns("NestedParamName").Ordinal + 1)
+                If dt.Columns.Contains("NestedParamName") AndAlso dt.Columns.Contains("TargetParamName") Then
+                    Dim targetOrdinal As Integer = dt.Columns("TargetParamName").Ordinal
+                    If targetOrdinal > 0 Then
+                        dt.Columns("NestedParamName").SetOrdinal(targetOrdinal - 1)
+                    Else
+                        dt.Columns("NestedParamName").SetOrdinal(0)
+                        dt.Columns("TargetParamName").SetOrdinal(1)
+                    End If
+                End If
             Catch
             End Try
         End Sub
