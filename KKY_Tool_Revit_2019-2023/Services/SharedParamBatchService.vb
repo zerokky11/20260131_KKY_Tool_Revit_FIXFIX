@@ -632,10 +632,15 @@ Namespace Services
         Private Shared Function FormatCategoryRefs(categories As List(Of CategoryRef)) As String
             If categories Is Nothing OrElse categories.Count = 0 Then Return ""
             Dim names = categories.
-                Select(Function(c) If(c Is Nothing, "", If(Not String.IsNullOrWhiteSpace(c.Name), c.Name, c.Path))).
+                Select(Function(c)
+                           If c Is Nothing Then Return ""
+                           Dim raw As String = If(Not String.IsNullOrWhiteSpace(c.Name), c.Name, c.Path)
+                           Return NormalizeRepresentativeCategoryName(raw)
+                       End Function).
                 Where(Function(x) Not String.IsNullOrWhiteSpace(x)).
                 Select(Function(x) $"[{x}]").
                 Distinct(StringComparer.OrdinalIgnoreCase).
+                OrderBy(Function(x) x, StringComparer.OrdinalIgnoreCase).
                 ToArray()
             Return String.Join(",", names)
         End Function
@@ -862,12 +867,22 @@ Namespace Services
             For Each o In arr
                 Dim d = ParsePayloadDict(o)
                 Dim c As New CategoryRef()
-                c.Name = TryGetString(d, "name")
-                c.Path = TryGetString(d, "path")
+                c.Name = NormalizeRepresentativeCategoryName(TryGetString(d, "name"))
+                c.Path = NormalizeRepresentativeCategoryPath(TryGetString(d, "path"))
                 Dim idRaw As String = TryGetString(d, "idInt")
                 Dim idValue As Integer
                 If Integer.TryParse(idRaw, idValue) Then c.IdInt = idValue
-                list.Add(c)
+
+                If Not String.IsNullOrWhiteSpace(TryGetString(d, "path")) AndAlso c.Path <> TryGetString(d, "path").Trim() Then
+                    c.IdInt = 0
+                End If
+
+                If String.IsNullOrWhiteSpace(c.Name) Then c.Name = c.Path
+                If String.IsNullOrWhiteSpace(c.Path) Then c.Path = c.Name
+
+                If Not String.IsNullOrWhiteSpace(c.Name) OrElse c.IdInt <> 0 Then
+                    list.Add(c)
+                End If
             Next
 
             Return list
@@ -1208,6 +1223,62 @@ Namespace Services
             End Try
         End Function
 
+        Private Shared Function NormalizeRepresentativeCategoryPath(path As String) As String
+            If String.IsNullOrWhiteSpace(path) Then Return ""
+            Dim trimmed As String = path.Trim()
+            Dim slashIndex As Integer = trimmed.IndexOf("\", StringComparison.Ordinal)
+            If slashIndex > 0 Then
+                trimmed = trimmed.Substring(0, slashIndex)
+            End If
+            Dim colonIndex As Integer = trimmed.IndexOf(":"c)
+            If colonIndex > 0 Then
+                trimmed = trimmed.Substring(0, colonIndex)
+            End If
+            Return trimmed.Trim()
+        End Function
+
+        Private Shared Function NormalizeRepresentativeCategoryName(name As String) As String
+            Return NormalizeRepresentativeCategoryPath(name)
+        End Function
+
+        Private Shared Function IsRepresentativeBindableCategory(cat As Category) As Boolean
+            If cat Is Nothing Then Return False
+
+            Dim bindable As Boolean = False
+            Try
+                bindable = cat.AllowsBoundParameters
+            Catch
+                bindable = False
+            End Try
+
+            Try
+                If cat.Id.IntegerValue = CInt(BuiltInCategory.OST_StairsSupports) Then
+                    bindable = True
+                End If
+            Catch
+            End Try
+
+            If Not bindable Then Return False
+
+            Dim nm As String = SafeCategoryName(cat)
+            If String.IsNullOrWhiteSpace(nm) Then Return False
+            If nm.StartsWith("<", StringComparison.OrdinalIgnoreCase) Then Return False
+            If nm.IndexOf("line style", StringComparison.OrdinalIgnoreCase) >= 0 Then Return False
+
+            Return True
+        End Function
+
+        Private Shared Function SafeCategoryName(cat As Category) As String
+            If cat Is Nothing Then Return ""
+            Try
+                Dim n As String = If(cat.Name, "")
+                If String.IsNullOrWhiteSpace(n) Then Return ""
+                Return n.Trim()
+            Catch
+                Return ""
+            End Try
+        End Function
+
         Private Shared Function DescribeCategoryRef(cref As CategoryRef) As String
             If cref Is Nothing Then Return "(null)"
             Dim p As String = If(cref.Path, "").Trim()
@@ -1400,64 +1471,35 @@ Namespace Services
 
         Private Shared Function BuildCategoryTree(doc As Document) As List(Of CategoryTreeItem)
             Dim roots As New List(Of CategoryTreeItem)()
-            Dim visitedPaths As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
+            If doc Is Nothing Then Return roots
 
             For Each c As Category In doc.Settings.Categories
-                Dim node As CategoryTreeItem = BuildCategoryTreeItemRecursive(c, Nothing, visitedPaths)
-                If node IsNot Nothing Then roots.Add(node)
+                If c Is Nothing Then Continue For
+
+                Dim parent As Category = Nothing
+                Try
+                    parent = c.Parent
+                Catch
+                    parent = Nothing
+                End Try
+                If parent IsNot Nothing Then Continue For
+
+                Dim name As String = SafeCategoryName(c)
+                If String.IsNullOrWhiteSpace(name) Then Continue For
+
+                If Not IsRepresentativeBindableCategory(c) Then Continue For
+
+                Dim node As New CategoryTreeItem() With {
+                    .IdInt = c.Id.IntegerValue,
+                    .Name = name,
+                    .Path = name,
+                    .CatType = c.CategoryType,
+                    .IsBindable = True
+                }
+                roots.Add(node)
             Next
 
-            Return roots.OrderBy(Function(x) x.Name).ToList()
-        End Function
-
-        Private Shared Function BuildCategoryTreeItemRecursive(cat As Category,
-                                                              parentPath As String,
-                                                              visitedPaths As HashSet(Of String)) As CategoryTreeItem
-            If cat Is Nothing Then Return Nothing
-
-            Dim path As String = If(String.IsNullOrEmpty(parentPath), cat.Name, parentPath & "\" & cat.Name)
-
-            If visitedPaths IsNot Nothing Then
-                If visitedPaths.Contains(path) Then Return Nothing
-                visitedPaths.Add(path)
-            End If
-
-            Dim bindable As Boolean = False
-            Try
-                bindable = cat.AllowsBoundParameters
-            Catch
-                bindable = False
-            End Try
-
-            Try
-                If cat.Id.IntegerValue = CInt(BuiltInCategory.OST_StairsSupports) Then
-                    bindable = True
-                End If
-            Catch
-            End Try
-
-            Dim it As New CategoryTreeItem() With {
-                .IdInt = cat.Id.IntegerValue,
-                .Name = cat.Name,
-                .Path = path,
-                .CatType = cat.CategoryType,
-                .IsBindable = bindable
-            }
-
-            Try
-                Dim subs As CategoryNameMap = cat.SubCategories
-                If subs IsNot Nothing Then
-                    For Each sc As Category In subs
-                        Dim child As CategoryTreeItem = BuildCategoryTreeItemRecursive(sc, path, visitedPaths)
-                        If child IsNot Nothing Then it.Children.Add(child)
-                    Next
-                End If
-            Catch
-            End Try
-
-            If it.IsBindable Then Return it
-            If it.Children IsNot Nothing AndAlso it.Children.Count > 0 Then Return it
-            Return Nothing
+            Return roots.OrderBy(Function(x) x.Name, StringComparer.OrdinalIgnoreCase).ToList()
         End Function
 
         Private Shared Function BuildAvailableCategoryMaps(doc As Document) As CategoryMaps
