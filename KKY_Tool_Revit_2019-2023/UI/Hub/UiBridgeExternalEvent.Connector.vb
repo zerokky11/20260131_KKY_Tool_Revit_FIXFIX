@@ -719,6 +719,14 @@ Namespace UI.Hub
             Return SafeCellString(row, header)
         End Function
 
+        Private Shared Function ConvertDistanceForUi(distanceInch As Double, uiUnit As String) As String
+            Dim v As Double = distanceInch
+            If String.Equals(uiUnit, "mm", StringComparison.OrdinalIgnoreCase) Then
+                v = distanceInch * 25.4R
+            End If
+            Return Math.Round(v, 3).ToString(Globalization.CultureInfo.InvariantCulture)
+        End Function
+
         ' 테두리/헤더/색상 스타일 헬퍼 (같은 워크북 내 공유)
         Private Shared Function CreateBorderedStyle(wb As XSSFWorkbook) As ICellStyle
             Dim st As ICellStyle = wb.CreateCellStyle()
