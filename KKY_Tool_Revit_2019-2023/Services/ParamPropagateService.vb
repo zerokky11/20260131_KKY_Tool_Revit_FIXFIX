@@ -994,7 +994,7 @@ Namespace Services
                     Next
                 End If
 
-                Infrastructure.ExcelCore.EnsureNoDataRow(dt, "오류가 없습니다.", New String() {"Status", "Result", "결과"})
+                Infrastructure.ExcelCore.EnsureNoDataRow(dt, "오류가 없습니다.")
 
                 Infrastructure.ExcelCore.SaveXlsx(sfd.FileName, "Results", dt, doAutoFit, "paramprop:progress")
                 Infrastructure.ExcelExportStyleRegistry.ApplyStylesForKey("paramprop", sfd.FileName, autoFit:=doAutoFit, excelMode:=If(doAutoFit, "normal", "fast"))

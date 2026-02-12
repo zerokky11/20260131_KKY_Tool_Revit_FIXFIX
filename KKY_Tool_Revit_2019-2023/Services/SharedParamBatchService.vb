@@ -536,7 +536,7 @@ Namespace Services
                 Next
             Next
 
-            ExcelCore.EnsureNoDataRow(dt, "오류가 없습니다.", New String() {"Status", "Result", "결과"})
+            ExcelCore.EnsureNoDataRow(dt, "오류가 없습니다.")
 
             Dim fileName As String = $"SharedParamBatch_{DateTime.Now:yyyyMMdd_HHmm}.xlsx"
             Dim saved As String = ExcelCore.PickAndSaveXlsx("Logs", dt, fileName, doAutoFit, "sharedparambatch:progress")

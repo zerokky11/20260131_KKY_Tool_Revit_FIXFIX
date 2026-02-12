@@ -249,36 +249,20 @@ Namespace UI.Hub
         End Sub
 
         Friend Shared Function ParseExcelMode(payload As Object) As Boolean
-            Dim mode As String = ""
-            Dim autoFitOverride As Boolean? = Nothing
+            Dim mode As String = "normal"
 
             Try
                 If payload IsNot Nothing Then
                     Dim modeProp = GetProp(payload, "excelMode")
-                    If modeProp IsNot Nothing Then mode = Convert.ToString(modeProp)
-
-                    Dim autoFitProp = GetProp(payload, "autoFit")
-                    If autoFitProp IsNot Nothing Then
-                        Dim parsed As Boolean
-                        If TypeOf autoFitProp Is Boolean Then
-                            autoFitOverride = CBool(autoFitProp)
-                        ElseIf Boolean.TryParse(Convert.ToString(autoFitProp), parsed) Then
-                            autoFitOverride = parsed
-                        End If
+                    If modeProp IsNot Nothing Then
+                        Dim raw = Convert.ToString(modeProp)
+                        If Not String.IsNullOrWhiteSpace(raw) Then mode = raw
                     End If
                 End If
             Catch
             End Try
 
-            If String.Equals(mode, "fast", StringComparison.OrdinalIgnoreCase) Then
-                Return False
-            End If
-
-            If autoFitOverride.HasValue Then
-                Return autoFitOverride.Value
-            End If
-
-            Return String.Equals(mode, "normal", StringComparison.OrdinalIgnoreCase)
+            Return Not String.Equals(mode, "fast", StringComparison.OrdinalIgnoreCase)
         End Function
 
         ' payload 속성 안전 추출(익명/Dictionary 수용)
