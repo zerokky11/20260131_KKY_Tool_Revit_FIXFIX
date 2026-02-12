@@ -145,6 +145,20 @@ Namespace Services
                 End Try
             Next
 
+            ResultTableFilter.KeepOnlyIssues("guid", projectTable)
+            If includeFamily Then
+                ResultTableFilter.KeepOnlyIssues("guid", familyDetail)
+
+                Dim famSet As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
+                If familyDetail IsNot Nothing AndAlso familyDetail.Columns.Contains("FamilyName") Then
+                    For Each r As DataRow In familyDetail.Rows
+                        Dim fn As String = Convert.ToString(r("FamilyName")).Trim()
+                        If Not String.IsNullOrWhiteSpace(fn) Then famSet.Add(fn)
+                    Next
+                End If
+                ResultTableFilter.KeepOnlyByNameSet(famIndex, "FamilyName", famSet)
+            End If
+
             Dim res As New RunResult() With {
                 .Mode = mode,
                 .Project = If(projectTable, Auditors.MakeFailureSummaryTable(1)),
@@ -170,6 +184,7 @@ Namespace Services
             Catch
                 doAutoFit = False
             End Try
+            ResultTableFilter.KeepOnlyIssues("guid", table)
             ExcelCore.EnsureMessageRow(table, "오류가 없습니다.")
 
             Using sfd As New SaveFileDialog()
@@ -195,6 +210,7 @@ Namespace Services
                 doAutoFit = False
             End Try
             For Each kv In sheets
+                ResultTableFilter.KeepOnlyIssues("guid", kv.Value)
                 ExcelCore.EnsureMessageRow(kv.Value, "오류가 없습니다.")
             Next
 

@@ -131,6 +131,7 @@ Namespace Services
                 End Try
             Next
 
+            rows = rows.Where(Function(x) Not String.Equals((If(x.Issue, "")).Trim(), "OK", StringComparison.OrdinalIgnoreCase)).ToList()
             Return rows
         End Function
 
@@ -175,6 +176,7 @@ Namespace Services
                 })
             End Try
 
+            rows = rows.Where(Function(x) Not String.Equals((If(x.Issue, "")).Trim(), "OK", StringComparison.OrdinalIgnoreCase)).ToList()
             Return rows
         End Function
 
