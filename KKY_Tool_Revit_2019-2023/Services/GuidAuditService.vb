@@ -217,6 +217,14 @@ Namespace Services
                 Next
             End If
 
+            If exportTable.Columns.Contains("RvtPath") Then
+                exportTable.Columns.Remove("RvtPath")
+            End If
+
+            If exportTable.Columns.Contains("BoundCategories") Then
+                exportTable.Columns("BoundCategories").SetOrdinal(exportTable.Columns.Count - 1)
+            End If
+
             ExcelCore.EnsureMessageRow(exportTable, "오류가 없습니다.")
 
             Return exportTable
@@ -797,24 +805,23 @@ Namespace Services
                 For Each cat As Category In binding.Categories
                     If cat Is Nothing Then Continue For
 
-                    Dim parentName As String = If(cat.Name, "")
-                    If String.IsNullOrWhiteSpace(parentName) Then Continue For
-                    names.Add($"[{parentName}]")
-
                     Try
-                        Dim subCats As CategoryNameMap = cat.SubCategories
-                        If subCats Is Nothing Then Continue For
-                        For Each subCat As Category In subCats
-                            If subCat Is Nothing Then Continue For
-                            Dim childName As String = If(subCat.Name, "")
-                            If String.IsNullOrWhiteSpace(childName) Then Continue For
-                            names.Add($"[{parentName}/{childName}]")
-                        Next
+                        If cat.Parent IsNot Nothing Then Continue For
                     Catch
                     End Try
+
+                    Dim name As String = If(cat.Name, "")
+                    If String.IsNullOrWhiteSpace(name) Then Continue For
+                    names.Add(name.Trim())
                 Next
 
-                Return String.Join(",", names.Distinct(StringComparer.OrdinalIgnoreCase).ToArray())
+                Dim sortedTopLevelNames = names.
+                    Distinct(StringComparer.OrdinalIgnoreCase).
+                    OrderBy(Function(x) x, StringComparer.OrdinalIgnoreCase).
+                    Select(Function(x) $"[{x}]").
+                    ToArray()
+
+                Return String.Join(",", sortedTopLevelNames)
             End Function
 
             Public Shared Function RunFamilyAudit(doc As Document,
