@@ -445,6 +445,11 @@ Namespace UI.Hub
             LogAutoFitDecision(doAutoFit, "UiBridgeExternalEvent.SaveExcelWithDialog")
 
             Try
+                If dt.Rows.Count = 0 Then
+                    Global.KKY_Tool_Revit.Infrastructure.ExcelCore.EnsureNoDataRow(dt, "추출 결과가 없습니다.")
+                    totalRows = dt.Rows.Count
+                End If
+
                 ReportExportProgress("EXCEL_WRITE", "엑셀 데이터 작성", totalRows, totalRows, 1.0, True)
                 ReportExportProgress("EXCEL_SAVE", "엑셀 파일 내보내기", totalRows, totalRows, 1.0, True)
 
