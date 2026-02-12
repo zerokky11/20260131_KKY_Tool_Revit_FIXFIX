@@ -91,7 +91,9 @@ Namespace Infrastructure
                 End If
 
                 For Each sh In targetSheets
-                    ApplyFreezeAndFilter(sh)
+                    ApplyStandardSheetStyle(wb, sh)
+                    ApplyBorders(wb, sh)
+                    ApplyKeySpecificFormats(styleKey, sh)
                 Next
 
                 fs.Close()
@@ -101,26 +103,70 @@ Namespace Infrastructure
             End Using
         End Sub
 
-        Private Sub ApplyFreezeAndFilter(sh As ISheet)
-            If sh Is Nothing Then Return
+        Private Sub ApplyStandardSheetStyle(wb As IWorkbook, sh As ISheet)
+            If wb Is Nothing OrElse sh Is Nothing Then Return
 
             Dim header = sh.GetRow(0)
             If header Is Nothing Then Return
 
-            Try
-                sh.CreateFreezePane(0, 1)
-            Catch
-            End Try
+            Dim headerStyle As ICellStyle = ExcelStyleHelper.GetHeaderStyle(wb)
+            If headerStyle Is Nothing Then Return
 
             Dim lastCol As Integer = CInt(header.LastCellNum) - 1
             If lastCol < 0 Then Return
 
-            Dim lastRow As Integer = Math.Max(0, sh.LastRowNum)
-            Dim range As New CellRangeAddress(0, lastRow, 0, lastCol)
-            Try
-                sh.SetAutoFilter(range)
-            Catch
-            End Try
+            For c As Integer = 0 To lastCol
+                Dim cell = header.GetCell(c)
+                If cell Is Nothing Then
+                    cell = header.CreateCell(c)
+                    cell.SetCellValue("")
+                End If
+                cell.CellStyle = headerStyle
+            Next
+        End Sub
+
+        Private Sub ApplyBorders(wb As IWorkbook, sh As ISheet)
+            If wb Is Nothing OrElse sh Is Nothing Then Return
+            Dim lastRow As Integer = sh.LastRowNum
+            If lastRow < 0 Then Return
+
+            For r As Integer = 0 To lastRow
+                Dim row = sh.GetRow(r)
+                If row Is Nothing Then Continue For
+
+                Dim lastCol As Integer = CInt(row.LastCellNum) - 1
+                If lastCol < 0 Then Continue For
+
+                For c As Integer = 0 To lastCol
+                    Dim cell = row.GetCell(c)
+                    If cell Is Nothing Then
+                        cell = row.CreateCell(c)
+                        cell.SetCellValue("")
+                    End If
+
+                    Dim src = cell.CellStyle
+                    Dim dst = wb.CreateCellStyle()
+                    If src IsNot Nothing Then
+                        dst.CloneStyleFrom(src)
+                    End If
+                    dst.BorderBottom = BorderStyle.Thin
+                    dst.BorderTop = BorderStyle.Thin
+                    dst.BorderLeft = BorderStyle.Thin
+                    dst.BorderRight = BorderStyle.Thin
+                    cell.CellStyle = dst
+                Next
+            Next
+        End Sub
+
+        Private Sub ApplyKeySpecificFormats(styleKey As String, sh As ISheet)
+            If sh Is Nothing Then Return
+            Dim key As String = NormalizeKey(styleKey)
+            If String.IsNullOrWhiteSpace(key) Then Return
+
+            ' key별 세부 포맷 확장 포인트 (현재는 중복 처리 방지를 위해 최소 동작 유지)
+            If key = "pms" Then
+                Return
+            End If
         End Sub
 
         Private Function SafeResolve(fn As RowStatusResolver, row As DataRow, table As DataTable) As ExcelStyleHelper.RowStatus
