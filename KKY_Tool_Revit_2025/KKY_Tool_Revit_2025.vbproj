@@ -1,6 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
+		<ImportDirectoryBuildProps>false</ImportDirectoryBuildProps>
+		<ImportDirectoryBuildTargets>false</ImportDirectoryBuildTargets>
 		<TargetFramework>net8.0-windows</TargetFramework>
 		<UseWPF>true</UseWPF>
 		<UseWindowsForms>true</UseWindowsForms>
@@ -249,5 +251,9 @@
 
 		<WriteLinesToFile File="$(AddinFile)" Lines="@(AddinXml)" Overwrite="true" Encoding="UTF-8" />
 		<Message Text="Created: $(AddinFile) -> $(BuiltDll)" Importance="high" />
+	</Target>
+
+	<Target Name="CheckForDuplicateItems" Condition="'$(EnableDefaultItems)' == 'false'">
+		<!-- intentionally empty -->
 	</Target>
 </Project>

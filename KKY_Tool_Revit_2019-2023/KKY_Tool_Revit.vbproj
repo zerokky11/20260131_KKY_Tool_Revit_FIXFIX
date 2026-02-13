@@ -1,6 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
 
 	<PropertyGroup>
+		<ImportDirectoryBuildProps>false</ImportDirectoryBuildProps>
+		<ImportDirectoryBuildTargets>false</ImportDirectoryBuildTargets>
 		<TargetFramework>net48</TargetFramework>
 		<UseWPF>true</UseWPF>
 		<UseWindowsForms>true</UseWindowsForms>
@@ -152,5 +154,9 @@
 						  Overwrite="true"
 						  Encoding="UTF-8" />
 		<Message Importance="high" Text="Created Revit addin file: $(AddinOutPath) -> $(DeployDll)" />
+	</Target>
+
+	<Target Name="CheckForDuplicateItems" Condition="'$(EnableDefaultItems)' == 'false'">
+		<!-- intentionally empty -->
 	</Target>
 </Project>

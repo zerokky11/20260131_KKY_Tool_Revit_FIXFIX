@@ -1,5 +1,0 @@
-<Project>
-  <Target Name="CheckForDuplicateItems" Condition="'$(EnableDefaultItems)' == 'false'">
-    <!-- intentionally empty -->
-  </Target>
-</Project>

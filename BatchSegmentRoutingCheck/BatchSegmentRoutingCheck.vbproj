@@ -1,6 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
+		<ImportDirectoryBuildProps>false</ImportDirectoryBuildProps>
+		<ImportDirectoryBuildTargets>false</ImportDirectoryBuildTargets>
 		<OutputType>Library</OutputType>
 		<RootNamespace>BatchSegmentRoutingCheck</RootNamespace>
 		<AssemblyName>BatchSegmentRoutingCheck</AssemblyName>
@@ -93,4 +95,8 @@
 
 	</Target>
 
+
+	<Target Name="CheckForDuplicateItems" Condition="'$(EnableDefaultItems)' == 'false'">
+		<!-- intentionally empty -->
+	</Target>
 </Project>
