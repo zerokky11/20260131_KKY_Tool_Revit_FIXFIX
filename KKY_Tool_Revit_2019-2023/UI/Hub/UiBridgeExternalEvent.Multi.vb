@@ -1,4 +1,4 @@
-Option Explicit On
+﻿Option Explicit On
 Option Strict On
 
 Imports System
@@ -359,7 +359,7 @@ NextItem:
                 Dim rows = FamilyLinkAuditService.RunOnDocument(doc, path, _multiRequest.FamilyLink.Targets, Nothing)
                 If rows IsNot Nothing Then
                     If _multiFamilyLinkRows Is Nothing Then _multiFamilyLinkRows = New List(Of FamilyLinkAuditRow)()
-                    _multiFamilyLinkRows.AddRange(rows)
+                    _multiFamilyLinkRows.AddRange(FilterFamilyLinkIssueRows(rows))
                 End If
                 ReportMultiProgress(CalcStepPercent(basePct, stepIndex, steps), "패밀리 연동 검토 완료", safeName)
             End If
@@ -393,20 +393,20 @@ NextItem:
         Private Sub HandleMultiExport(payload As Object)
             Dim key As String = TryCast(GetProp(payload, "key"), String)
             Dim excelMode As String = TryCast(GetProp(payload, "excelMode"), String)
-            Dim doAutoFit As Boolean = String.Equals(excelMode, "normal", StringComparison.OrdinalIgnoreCase)
+            Dim doAutoFit As Boolean = ParseExcelMode(payload)
 
             Try
                 Select Case If(key, "").ToLowerInvariant()
                     Case "connector"
-                        ExportConnector(doAutoFit)
+                        ExportConnector(doAutoFit, excelMode)
                     Case "pms"
-                        ExportSegmentPms(doAutoFit)
+                        ExportSegmentPms(doAutoFit, excelMode)
                     Case "guid"
                         ExportGuid(excelMode)
                     Case "familylink"
-                        ExportFamilyLink(doAutoFit)
+                        ExportFamilyLink(doAutoFit, excelMode)
                     Case "points"
-                        ExportPoints(doAutoFit)
+                        ExportPoints(doAutoFit, excelMode)
                     Case Else
                         SendToWeb("hub:multi-exported", New With {.ok = False, .message = "알 수 없는 기능 키입니다."})
                         Return
@@ -418,17 +418,17 @@ NextItem:
         End Sub
 
         ' [추가] 저장된 파일에 기능별(키별) 스타일 적용 (등록된 키만 적용됨)
-        Private Sub TryApplyExportStyles(exportKey As String, savedPath As String)
+        Private Sub TryApplyExportStyles(exportKey As String, savedPath As String, Optional doAutoFit As Boolean = True, Optional excelMode As String = "normal")
             If String.IsNullOrWhiteSpace(exportKey) Then Exit Sub
             If String.IsNullOrWhiteSpace(savedPath) Then Exit Sub
             Try
-                Global.KKY_Tool_Revit.Infrastructure.ExcelExportStyleRegistry.ApplyStylesForKey(exportKey, savedPath)
+                Global.KKY_Tool_Revit.Infrastructure.ExcelExportStyleRegistry.ApplyStylesForKey(exportKey, savedPath, autoFit:=doAutoFit, excelMode:=excelMode)
             Catch
                 ' 스타일 실패해도 저장 성공은 유지
             End Try
         End Sub
 
-        Private Sub ExportConnector(doAutoFit As Boolean)
+        Private Sub ExportConnector(doAutoFit As Boolean, excelMode As String)
             Dim rows = If(_multiConnectorRows, New List(Of Dictionary(Of String, Object))())
             Dim allFiles As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
             If _multiRequest IsNot Nothing AndAlso _multiRequest.RvtPaths IsNot Nothing Then
@@ -476,18 +476,19 @@ NextItem:
             End If
             Dim headers As List(Of String) = BuildConnectorHeaders(extras, uiUnit)
             Dim table = BuildConnectorTableFromRows(headers, exportRows)
+            ExcelCore.EnsureNoDataRow(table, "오류가 없습니다.")
             If Not ValidateSchema(table, headers) Then Throw New InvalidOperationException("스키마 검증 실패: 커넥터")
             Dim saved = ExcelCore.PickAndSaveXlsx("Connector Diagnostics", table, $"Connector_{Date.Now:yyyyMMdd_HHmm}.xlsx", doAutoFit, "hub:multi-progress", "connector")
             If String.IsNullOrWhiteSpace(saved) Then
                 SendToWeb("hub:multi-exported", New With {.ok = False, .message = "엑셀 저장이 취소되었습니다."})
             Else
                 ' [추가] 저장 직후 스타일 적용
-                TryApplyExportStyles("connector", saved)
+                TryApplyExportStyles("connector", saved, doAutoFit, If(excelMode, "normal"))
                 SendToWeb("hub:multi-exported", New With {.ok = True, .path = saved})
             End If
         End Sub
 
-        Private Sub ExportSegmentPms(doAutoFit As Boolean)
+        Private Sub ExportSegmentPms(doAutoFit As Boolean, excelMode As String)
             Dim classRows = If(_multiPmsClassRows, New List(Of Dictionary(Of String, Object))())
             Dim sizeRows = If(_multiPmsSizeRows, New List(Of Dictionary(Of String, Object))())
             Dim routingRows = If(_multiPmsRoutingRows, New List(Of Dictionary(Of String, Object))())
@@ -500,6 +501,9 @@ NextItem:
             Dim classTable = BuildTableFromRows(classHeaders, classRows)
             Dim sizeTable = BuildTableFromRows(sizeHeaders, sizeRows)
             Dim routingTable = BuildTableFromRows(routingHeaders, routingRows)
+            ExcelCore.EnsureNoDataRow(classTable, "오류가 없습니다.")
+            ExcelCore.EnsureNoDataRow(sizeTable, "오류가 없습니다.")
+            ExcelCore.EnsureNoDataRow(routingTable, "오류가 없습니다.")
 
             If totalRowsCount = 0 Then
                 AddEmptyMessageRow(classTable)
@@ -526,12 +530,13 @@ NextItem:
                 SendToWeb("hub:multi-exported", New With {.ok = False, .message = "엑셀 저장이 취소되었습니다."})
             Else
                 ' 등록된 스타일 키가 있으면 적용(현재는 보통 no-op)
-                TryApplyExportStyles("pms", saved)
+                TryApplyExportStyles("pms", saved, doAutoFit, If(excelMode, "normal"))
                 SendToWeb("hub:multi-exported", New With {.ok = True, .path = saved})
             End If
         End Sub
 
         Private Sub ExportGuid(excelMode As String)
+            Dim doAutoFit As Boolean = String.Equals(excelMode, "normal", StringComparison.OrdinalIgnoreCase)
             If _multiGuidProject Is Nothing Then
                 SendToWeb("hub:multi-exported", New With {.ok = False, .message = "GUID 결과가 없습니다."})
                 Return
@@ -545,23 +550,23 @@ NextItem:
             If String.IsNullOrWhiteSpace(saved) Then
                 SendToWeb("hub:multi-exported", New With {.ok = False, .message = "엑셀 저장이 취소되었습니다."})
             Else
-                TryApplyExportStyles("guid", saved)
+                TryApplyExportStyles("guid", saved, doAutoFit, If(excelMode, "normal"))
                 SendToWeb("hub:multi-exported", New With {.ok = True, .path = saved})
             End If
         End Sub
 
-        Private Sub ExportFamilyLink(doAutoFit As Boolean)
+        Private Sub ExportFamilyLink(doAutoFit As Boolean, excelMode As String)
             Dim rows = If(_multiFamilyLinkRows, New List(Of FamilyLinkAuditRow)())
-            Dim saved = FamilyLinkAuditExport.Export(rows, fastExport:=Not doAutoFit, autoFit:=doAutoFit)
+            Dim saved = FamilyLinkAuditExport.Export(rows, fastExport:=String.Equals(excelMode, "fast", StringComparison.OrdinalIgnoreCase), autoFit:=doAutoFit)
             If String.IsNullOrWhiteSpace(saved) Then
                 SendToWeb("hub:multi-exported", New With {.ok = False, .message = "엑셀 저장이 취소되었습니다."})
             Else
-                TryApplyExportStyles("familylink", saved)
+                TryApplyExportStyles("familylink", saved, doAutoFit, If(excelMode, "normal"))
                 SendToWeb("hub:multi-exported", New With {.ok = True, .path = saved})
             End If
         End Sub
 
-        Private Sub ExportPoints(doAutoFit As Boolean)
+        Private Sub ExportPoints(doAutoFit As Boolean, excelMode As String)
             Dim pointRows = If(_multiPointRows, New List(Of ExportPointsService.Row)())
             Dim unit As String = "ft"
             If _multiRequest IsNot Nothing AndAlso _multiRequest.Points IsNot Nothing Then
@@ -583,11 +588,11 @@ NextItem:
             Next
             Dim table = BuildPointTable(headers, rows)
             If Not ValidateSchema(table, headers) Then Throw New InvalidOperationException("스키마 검증 실패: Points")
-            Dim saved = ExcelCore.PickAndSaveXlsx("Points", table, $"Points_{Date.Now:yyyyMMdd_HHmm}.xlsx", doAutoFit, "hub:multi-progress")
+            Dim saved = ExcelCore.PickAndSaveXlsx("Points", table, $"Points_{Date.Now:yyyyMMdd_HHmm}.xlsx", doAutoFit, "hub:multi-progress", "points")
             If String.IsNullOrWhiteSpace(saved) Then
                 SendToWeb("hub:multi-exported", New With {.ok = False, .message = "엑셀 저장이 취소되었습니다."})
             Else
-                TryApplyExportStyles("points", saved)
+                TryApplyExportStyles("points", saved, doAutoFit, If(excelMode, "normal"))
                 SendToWeb("hub:multi-exported", New With {.ok = True, .path = saved})
             End If
         End Sub
@@ -871,12 +876,7 @@ NextItem:
         End Function
 
         Private Shared Sub AddEmptyMessageRow(table As DataTable)
-            If table Is Nothing Then Return
-            If table.Rows.Count > 0 Then Return
-            If table.Columns.Count = 0 Then Return
-            Dim dr = table.NewRow()
-            dr(0) = "오류가 없습니다."
-            table.Rows.Add(dr)
+            ExcelCore.EnsureNoDataRow(table, "오류가 없습니다.")
         End Sub
 
         Private Shared Function ValidateSchema(table As DataTable, headers As IList(Of String)) As Boolean
@@ -897,19 +897,28 @@ NextItem:
             If _multiPmsClassRows Is Nothing Then _multiPmsClassRows = New List(Of Dictionary(Of String, Object))()
             If _multiPmsSizeRows Is Nothing Then _multiPmsSizeRows = New List(Of Dictionary(Of String, Object))()
             If _multiPmsRoutingRows Is Nothing Then _multiPmsRoutingRows = New List(Of Dictionary(Of String, Object))()
-            _multiPmsClassRows.AddRange(classRows)
-            _multiPmsSizeRows.AddRange(sizeRows)
-            _multiPmsRoutingRows.AddRange(routingRows)
+            _multiPmsClassRows.AddRange(FilterIssueRowsFromDict("pms", classRows))
+            _multiPmsSizeRows.AddRange(FilterIssueRowsFromDict("pms", sizeRows))
+            _multiPmsRoutingRows.AddRange(FilterIssueRowsFromDict("pms", routingRows))
         End Sub
 
         Private Sub MergeGuidResult(res As GuidAuditService.RunResult)
             If res Is Nothing Then Return
-            _multiGuidProject = MergeTable(_multiGuidProject, res.Project)
+            _multiGuidProject = MergeTable(_multiGuidProject, FilterIssueRowsCopy("guid", res.Project))
             If res.IncludeFamily Then
-                _multiGuidFamilyDetail = MergeTable(_multiGuidFamilyDetail, res.FamilyDetail)
+                _multiGuidFamilyDetail = MergeTable(_multiGuidFamilyDetail, FilterIssueRowsCopy("guid", res.FamilyDetail))
                 _multiGuidFamilyIndex = MergeTable(_multiGuidFamilyIndex, res.FamilyIndex)
             End If
         End Sub
+
+        Private Shared Function FilterIssueRowsFromDict(styleKey As String, rows As List(Of Dictionary(Of String, Object))) As List(Of Dictionary(Of String, Object))
+            Dim source As List(Of Dictionary(Of String, Object)) = If(rows, New List(Of Dictionary(Of String, Object))())
+            If source.Count = 0 Then Return source
+
+            Dim table As DataTable = DictListToDataTable(source, "ReviewRows")
+            Dim filtered As DataTable = FilterIssueRowsCopy(styleKey, table)
+            Return DataTableToObjects(filtered)
+        End Function
 
         Private Shared Function MergeTable(master As DataTable, part As DataTable) As DataTable
             If part Is Nothing Then Return master

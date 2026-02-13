@@ -55,6 +55,9 @@ Namespace Infrastructure
             If table Is Nothing Then Throw New ArgumentNullException(NameOf(table))
 
             EnsureDir(filePath)
+            If ShouldEnsureNoDataRow(sheetName, sheetKey, exportKind) Then
+                EnsureNoDataRow(table)
+            End If
 
             Using wb As IWorkbook = New XSSFWorkbook()
                 Dim safeSheet = NormalizeSheetName(If(sheetName, "Sheet1"))
@@ -89,6 +92,9 @@ Namespace Infrastructure
                     Dim safe = MakeUniqueSheetName(NormalizeSheetName(name), usedNames)
                     usedNames.Add(safe)
 
+                    If ShouldEnsureNoDataRow(safe, name, Nothing) Then
+                        EnsureNoDataRow(table)
+                    End If
                     Dim sheet = wb.CreateSheet(safe)
                     WriteTableToSheet(wb, sheet, safe, table, sheetKey:=name, autoFit:=autoFit, progressKey:=progressKey, exportKind:=Nothing)
                 Next
@@ -191,6 +197,78 @@ Namespace Infrastructure
                     cell.CellStyle = st
                 Next
             Next
+        End Sub
+
+
+        Private ReadOnly ReviewExportKeys As HashSet(Of String) = New HashSet(Of String)(StringComparer.OrdinalIgnoreCase) From {
+            "guid",
+            "familylink",
+            "paramprop",
+            "pms",
+            "sharedparambatch",
+            "connector"
+        }
+
+        Private Function ShouldEnsureNoDataRow(sheetName As String,
+                                               sheetKey As String,
+                                               exportKind As String) As Boolean
+            Dim key As String = NormalizeExportPolicyKey(exportKind, sheetKey, sheetName)
+            If String.IsNullOrWhiteSpace(key) Then Return False
+
+            If key.Equals("points", StringComparison.OrdinalIgnoreCase) OrElse
+               key.Equals("export", StringComparison.OrdinalIgnoreCase) Then
+                Return False
+            End If
+
+            Return ReviewExportKeys.Contains(key)
+        End Function
+
+        Private Function NormalizeExportPolicyKey(exportKind As String,
+                                                  sheetKey As String,
+                                                  sheetName As String) As String
+            Dim raw As String = ""
+            If Not String.IsNullOrWhiteSpace(exportKind) Then
+                raw = exportKind
+            ElseIf Not String.IsNullOrWhiteSpace(sheetKey) Then
+                raw = sheetKey
+            Else
+                raw = If(sheetName, "")
+            End If
+
+            If String.IsNullOrWhiteSpace(raw) Then Return ""
+            Dim s As String = raw.Trim().ToLowerInvariant()
+
+            If s.Contains("point") Then Return "points"
+            If s = "export" Then Return "export"
+            If s.Contains("guid") Then Return "guid"
+            If s.Contains("familylink") OrElse s.Contains("family link") Then Return "familylink"
+            If s.Contains("param") Then Return "paramprop"
+            If s.Contains("pms") OrElse s.Contains("segment") Then Return "pms"
+            If s.Contains("sharedparambatch") Then Return "sharedparambatch"
+            If s.Contains("connector") Then Return "connector"
+
+            Return s
+        End Function
+
+        Public Sub EnsureNoDataRow(table As DataTable,
+                                   Optional message As String = "오류가 없습니다.")
+            If table Is Nothing Then Return
+
+            If table.Columns.Count = 0 Then
+                table.Columns.Add("Message", GetType(String))
+            End If
+
+            If table.Rows.Count > 0 Then Return
+
+            Dim finalMessage As String = If(String.IsNullOrWhiteSpace(message), "오류가 없습니다.", message)
+            Dim row = table.NewRow()
+            row(0) = finalMessage
+            table.Rows.Add(row)
+        End Sub
+
+        Public Sub EnsureMessageRow(table As DataTable,
+                                    Optional message As String = "오류가 없습니다.")
+            EnsureNoDataRow(table, message)
         End Sub
 
         Public Sub SaveCsv(filePath As String, table As DataTable)

@@ -1,4 +1,4 @@
-Option Explicit On
+﻿Option Explicit On
 Option Strict On
 
 Imports System
@@ -13,6 +13,7 @@ Imports Autodesk.Revit.DB
 Imports Autodesk.Revit.DB.Plumbing
 Imports Autodesk.Revit.UI
 Imports KKY_Tool_Revit.UI.Hub
+Imports KKY_Tool_Revit.Infrastructure
 Imports NPOI.SS.UserModel
 Imports NPOI.SS.Formula.Eval
 Imports NPOI.SS.Util
@@ -361,38 +362,32 @@ Namespace Services
 
         Public Shared Sub SaveDataSetToXlsx(ds As DataSet, path As String, Optional doAutoFit As Boolean = False, Optional progressChannel As String = Nothing)
             If ds Is Nothing Then Return
-            Dim totalRows As Integer = 0
-            For Each t As DataTable In ds.Tables
-                If t IsNot Nothing Then
-                    totalRows += t.Rows.Count
-                End If
-            Next
-            Dim written As Integer = 0
+
+            If ds.Tables.Contains(TableRules) Then
+                Global.KKY_Tool_Revit.Infrastructure.ResultTableFilter.KeepOnlyIssues("pms", ds.Tables(TableRules))
+                ExcelCore.EnsureNoDataRow(ds.Tables(TableRules), "오류가 없습니다.")
+            End If
+            If ds.Tables.Contains(TableSizes) Then
+                Global.KKY_Tool_Revit.Infrastructure.ResultTableFilter.KeepOnlyIssues("pms", ds.Tables(TableSizes))
+                ExcelCore.EnsureNoDataRow(ds.Tables(TableSizes), "오류가 없습니다.")
+            End If
+            If ds.Tables.Contains(TableRouting) Then
+                Global.KKY_Tool_Revit.Infrastructure.ResultTableFilter.KeepOnlyIssues("pms", ds.Tables(TableRouting))
+                ExcelCore.EnsureNoDataRow(ds.Tables(TableRouting), "오류가 없습니다.")
+            End If
+
+            Dim sheets As New List(Of KeyValuePair(Of String, DataTable))()
+            If ds.Tables.Contains(TableMeta) Then sheets.Add(New KeyValuePair(Of String, DataTable)(TableMeta, ds.Tables(TableMeta)))
+            If ds.Tables.Contains(TableFiles) Then sheets.Add(New KeyValuePair(Of String, DataTable)(TableFiles, ds.Tables(TableFiles)))
+            If ds.Tables.Contains(TableRules) Then sheets.Add(New KeyValuePair(Of String, DataTable)(TableRules, ds.Tables(TableRules)))
+            If ds.Tables.Contains(TableSizes) Then sheets.Add(New KeyValuePair(Of String, DataTable)(TableSizes, ds.Tables(TableSizes)))
+            If ds.Tables.Contains(TableRouting) Then sheets.Add(New KeyValuePair(Of String, DataTable)(TableRouting, ds.Tables(TableRouting)))
+
             Global.KKY_Tool_Revit.UI.Hub.ExcelProgressReporter.Reset(progressChannel)
-            Global.KKY_Tool_Revit.UI.Hub.ExcelProgressReporter.Report(progressChannel, "EXCEL_INIT", "엑셀 워크북 준비", 0, totalRows, Nothing, True)
             UI.Hub.UiBridgeExternalEvent.LogAutoFitDecision(doAutoFit, "SegmentPmsCheckService.SaveDataSetToXlsx")
-            Try
-                Dim wb As IWorkbook = New XSSFWorkbook()
-                If ds.Tables.Contains(TableMeta) Then WriteSheet(wb, TableMeta, ds.Tables(TableMeta), progressChannel, written, totalRows)
-                If ds.Tables.Contains(TableFiles) Then WriteSheet(wb, TableFiles, ds.Tables(TableFiles), progressChannel, written, totalRows)
-                If ds.Tables.Contains(TableRules) Then WriteSheet(wb, TableRules, ds.Tables(TableRules), progressChannel, written, totalRows)
-                If ds.Tables.Contains(TableSizes) Then WriteSheet(wb, TableSizes, ds.Tables(TableSizes), progressChannel, written, totalRows)
-                If ds.Tables.Contains(TableRouting) Then WriteSheet(wb, TableRouting, ds.Tables(TableRouting), progressChannel, written, totalRows)
-                Global.KKY_Tool_Revit.UI.Hub.ExcelProgressReporter.Report(progressChannel, "EXCEL_SAVE", "파일 저장 중", written, totalRows, Nothing, True)
-                SaveWorkbookSafely(wb, path)
-                wb.Close()
-                Dim autoFitMessage As String = If(doAutoFit, "AutoFit 적용", "빠른 모드: AutoFit 생략")
-                If doAutoFit Then
-                    Global.KKY_Tool_Revit.UI.Hub.ExcelProgressReporter.Report(progressChannel, "AUTOFIT", autoFitMessage, written, totalRows, Nothing, True)
-                    Global.KKY_Tool_Revit.Infrastructure.ExcelCore.TryAutoFitWithExcel(path)
-                Else
-                    Global.KKY_Tool_Revit.UI.Hub.ExcelProgressReporter.Report(progressChannel, "AUTOFIT", autoFitMessage, written, totalRows, Nothing, True)
-                End If
-                Global.KKY_Tool_Revit.UI.Hub.ExcelProgressReporter.Report(progressChannel, "DONE", "엑셀 내보내기 완료", written, totalRows, 100.0R, True)
-            Catch ex As Exception
-                Global.KKY_Tool_Revit.UI.Hub.ExcelProgressReporter.Report(progressChannel, "ERROR", ex.Message, written, totalRows, Nothing, True)
-                Throw
-            End Try
+            ExcelCore.SaveXlsxMulti(path, sheets, doAutoFit, progressChannel)
+            ExcelExportStyleRegistry.ApplyStylesForKey("pms", path, autoFit:=doAutoFit, excelMode:=If(doAutoFit, "normal", "fast"))
+            Global.KKY_Tool_Revit.UI.Hub.ExcelProgressReporter.Report(progressChannel, "DONE", "엑셀 내보내기 완료", 0, 0, 100.0R, True)
         End Sub
 
         Public Shared Function LoadExtractFromXlsx(path As String) As DataSet

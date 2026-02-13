@@ -75,6 +75,12 @@
   padding: 6px 8px;
 }
 
+.sharedparambatch-input:hover,
+.sharedparambatch-select:hover,
+.sharedparambatch-def-list:hover {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border-soft));
+}
+
 .sharedparambatch-input::placeholder,
 .sharedparambatch-select::placeholder {
   color: var(--text-soft);
@@ -83,6 +89,14 @@
 .sharedparambatch-def-list option {
   color: var(--text-main);
   background: var(--surface-main);
+}
+
+.sharedparambatch-select option:checked,
+.sharedparambatch-def-list option:checked,
+.sharedparambatch-select option:hover,
+.sharedparambatch-def-list option:hover {
+  color: var(--text-main);
+  background: color-mix(in srgb, var(--accent) 26%, var(--surface-main));
 }
 
 .sharedparambatch-def-list {
@@ -311,6 +325,13 @@
   flex-wrap: wrap;
 }
 
+.sharedparambatch-preset-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) minmax(120px, 1fr) auto auto auto;
+  gap: 8px;
+  align-items: center;
+}
+
 .sharedparambatch-category-tree {
   border: 1px solid var(--border-soft);
   border-radius: 12px;
@@ -333,8 +354,58 @@
   padding: 2px 0;
 }
 
+.sharedparambatch-tree-row:hover {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-radius: 6px;
+}
+
+.sharedparambatch-tree-row span {
+  color: var(--text-main);
+}
+
 @media (max-width: 960px) {
   .sharedparambatch-source {
     grid-template-columns: 1fr;
   }
+}
+
+.sharedparambatch-input,
+.sharedparambatch-select {
+  color-scheme: light dark;
+}
+
+.sharedparambatch-select option {
+  background: var(--surface-main);
+  color: var(--text-main);
+}
+
+.sharedparambatch-input:focus,
+.sharedparambatch-select:focus {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 1px;
+}
+
+@media (max-width: 960px) {
+  .sharedparambatch-preset-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* sharedparambatch dropdown/readability hardening (light/dark) */
+.sharedparambatch-select,
+.spb-groupSelect,
+.sharedparambatch-preset-select {
+  color: var(--text-main);
+  background-color: var(--surface-main);
+}
+
+.sharedparambatch-select option,
+.spb-groupSelect option,
+.sharedparambatch-preset-select option,
+.sharedparambatch-select optgroup,
+.spb-groupSelect optgroup,
+.sharedparambatch-preset-select optgroup {
+  color: var(--text-main);
+  background-color: var(--surface-main);
 }

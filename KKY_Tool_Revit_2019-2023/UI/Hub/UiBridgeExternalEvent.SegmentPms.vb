@@ -1,4 +1,4 @@
-Option Explicit On
+﻿Option Explicit On
 Option Strict On
 
 Imports System
@@ -488,8 +488,9 @@ Namespace UI.Hub
                 _segmentPmsLastResult = Nothing
                 Dim run = SegmentPmsCheckService.RunCompare(_extractData, _pmsRows, maps, opts)
                 _lastRunResult = run
-                _segmentPmsLastResult = New SegmentPmsResultCache With {.RunResult = run, .TotalCount = If(run.CompareTable Is Nothing, 0, run.CompareTable.Rows.Count)}
-                Dim compare = DataTableToObjects(run.CompareTable)
+                Dim filteredCompareTable As DataTable = FilterIssueRowsCopy("pms", run.CompareTable)
+                _segmentPmsLastResult = New SegmentPmsResultCache With {.RunResult = run, .TotalCount = If(filteredCompareTable Is Nothing, 0, filteredCompareTable.Rows.Count)}
+                Dim compare = DataTableToObjects(filteredCompareTable)
                 Dim map = DataTableToObjects(run.MapTable)
                 Dim revitRaw = DataTableToObjects(run.RevitSizeTable)
                 Dim pmsRaw = DataTableToObjects(run.PmsSizeTable)
@@ -529,6 +530,7 @@ Namespace UI.Hub
                 End If
 
                 Dim compareRows = If(compareTable, DictListToDataTable(CoerceRowsToDictList(GetDictValue(pd, "compare")), "SizeCompare"))
+                compareRows = FilterIssueRowsCopy("pms", compareRows)
                 Dim mapRows = If(mapTable, DictListToDataTable(CoerceRowsToDictList(GetDictValue(pd, "map")), "PipeTypeSegmentMap"))
 
                 Dim classRows = SegmentPmsCheckService.BuildClassCheckRows(mapRows)
@@ -541,7 +543,6 @@ Namespace UI.Hub
                     Global.KKY_Tool_Revit.UI.Hub.ExcelProgressReporter.Reset("segmentpms:progress")
                     Global.KKY_Tool_Revit.UI.Hub.ExcelProgressReporter.Report("segmentpms:progress", "EXCEL_INIT", "엑셀 워크북 준비", 0, totalRowsCount, Nothing, True)
                     LogAutoFitDecision(doAutoFit, "UiBridgeExternalEvent.HandleSegmentPmsSaveResult")
-                    Dim wb As IWorkbook = New XSSFWorkbook()
 
                     Dim classHeaders As New List(Of String) From {"File", "PipeType", "Segment", "Class검토결과"}
                     Dim sizeHeaders As New List(Of String) From {"FileName", "PipeType", "RevitSegment", "PMSCompared", "ND", "ID", "OD", "PMS ND", "PMS ID", "PMS OD", "Result"}
@@ -553,25 +554,27 @@ Namespace UI.Hub
                         routingRows = BuildEmptyRows(routingHeaders)
                     End If
 
-                    AddSheet(wb, "Pipe Segment Class검토", classRows, classHeaders, "segmentpms:progress", written, totalRowsCount, doAutoFit)
-                    AddSheet(wb, "PMS vs Segment Size검토", sizeRows, sizeHeaders, "segmentpms:progress", written, totalRowsCount, doAutoFit)
-                    AddSheet(wb, "Routing Class검토", routingRows, routingHeaders, "segmentpms:progress", written, totalRowsCount, doAutoFit)
+                    If classRows Is Nothing OrElse classRows.Count = 0 Then classRows = BuildEmptyRows(classHeaders)
+                    If sizeRows Is Nothing OrElse sizeRows.Count = 0 Then sizeRows = BuildEmptyRows(sizeHeaders)
+                    If routingRows Is Nothing OrElse routingRows.Count = 0 Then routingRows = BuildEmptyRows(routingHeaders)
+
+                    Dim classTable = BuildTableFromRows(classHeaders, classRows)
+                    Dim sizeTable = BuildTableFromRows(sizeHeaders, sizeRows)
+                    Dim routingTable = BuildTableFromRows(routingHeaders, routingRows)
+                    Dim sheets As New List(Of KeyValuePair(Of String, DataTable)) From {
+                        New KeyValuePair(Of String, DataTable)("Pipe Segment Class검토", classTable),
+                        New KeyValuePair(Of String, DataTable)("PMS vs Segment Size검토", sizeTable),
+                        New KeyValuePair(Of String, DataTable)("Routing Class검토", routingTable)
+                    }
+
                     Dim savePath As String = dlg.FileName
                     Try
                         savePath = System.IO.Path.GetFullPath(dlg.FileName)
                     Catch
                     End Try
                     Global.KKY_Tool_Revit.UI.Hub.ExcelProgressReporter.Report("segmentpms:progress", "EXCEL_SAVE", "파일 저장 중", written, totalRowsCount, Nothing, True)
-                    SaveWorkbookSafe(wb, savePath)
-                    WaitForFileReady(savePath)
-                    wb.Close()
-                    Dim autoFitMessage As String = If(doAutoFit, "AutoFit 적용", "빠른 모드: AutoFit 생략")
-                    If doAutoFit Then
-                        Global.KKY_Tool_Revit.UI.Hub.ExcelProgressReporter.Report("segmentpms:progress", "AUTOFIT", autoFitMessage, written, totalRowsCount, Nothing, True)
-                        Global.KKY_Tool_Revit.Infrastructure.ExcelCore.TryAutoFitWithExcel(savePath)
-                    Else
-                        Global.KKY_Tool_Revit.UI.Hub.ExcelProgressReporter.Report("segmentpms:progress", "AUTOFIT", autoFitMessage, written, totalRowsCount, Nothing, True)
-                    End If
+                    ExcelCore.SaveXlsxMulti(savePath, sheets, doAutoFit, "segmentpms:progress")
+                    ExcelExportStyleRegistry.ApplyStylesForKey("pms", savePath, autoFit:=doAutoFit, excelMode:=If(doAutoFit, "normal", "fast"))
                     Global.KKY_Tool_Revit.UI.Hub.ExcelProgressReporter.Report("segmentpms:progress", "DONE", "엑셀 내보내기 완료", written, totalRowsCount, 100.0R, True)
                     SendToWeb("segmentpms:saved", New With {.path = savePath})
                 Catch ex As Exception
@@ -768,11 +771,37 @@ Namespace UI.Hub
             ExcelCore.ApplyResultFillByHeader(wb, sh, 0)
         End Sub
 
+        Private Shared Function BuildTableFromRows(headers As IList(Of String), rows As List(Of Dictionary(Of String, Object))) As DataTable
+            Dim dt As New DataTable("Export")
+            If headers Is Nothing Then Return dt
+            For Each h In headers
+                dt.Columns.Add(h)
+            Next
+            If rows Is Nothing Then Return dt
+            For Each src In rows
+                Dim dr = dt.NewRow()
+                For i As Integer = 0 To headers.Count - 1
+                    Dim v As Object = Nothing
+                    If src IsNot Nothing Then src.TryGetValue(headers(i), v)
+                    dr(i) = If(v, String.Empty)
+                Next
+                dt.Rows.Add(dr)
+            Next
+            Return dt
+        End Function
+
         Private Shared Function BuildEmptyRows(columns As IList(Of String)) As List(Of Dictionary(Of String, Object))
             Dim list As New List(Of Dictionary(Of String, Object))()
             If columns Is Nothing OrElse columns.Count = 0 Then Return list
             Dim row As New Dictionary(Of String, Object)(StringComparer.Ordinal)
             row(columns(0)) = "오류가 없습니다."
+            For Each c In columns
+                If String.Equals(c, "Result", StringComparison.OrdinalIgnoreCase) OrElse
+                   String.Equals(c, "Status", StringComparison.OrdinalIgnoreCase) OrElse
+                   c.Contains("검토") Then
+                    row(c) = "NO_DATA"
+                End If
+            Next
             list.Add(row)
             Return list
         End Function

@@ -106,13 +106,13 @@ Namespace UI.Hub
                                                End Sub,
                                                includeFamily:=includeFamily,
                                                includeAnnotation:=includeAnnotation)
-                _guidProject = res.Project
-                _guidFamilyDetail = res.FamilyDetail
+                _guidProject = FilterIssueRowsCopy("guid", res.Project)
+                _guidFamilyDetail = FilterIssueRowsCopy("guid", res.FamilyDetail)
                 _guidFamilyIndex = res.FamilyIndex
                 _guidRunId = res.RunId
                 _guidIncludeFamily = res.IncludeFamily
 
-                Dim payloadProject As TablePayload = ShapeTable(res.Project, New HashSet(Of String)(StringComparer.OrdinalIgnoreCase) From {"RvtPath"})
+                Dim payloadProject As TablePayload = ShapeTable(_guidProject, New HashSet(Of String)(StringComparer.OrdinalIgnoreCase) From {"RvtPath"})
                 Dim payloadFamily As TablePayload = ShapeTable(res.FamilyIndex, Nothing)
 
                 Dim donePayload = New With {
@@ -173,13 +173,16 @@ Namespace UI.Hub
                     sheetList.Add(New KeyValuePair(Of String, DataTable)("RVT 검토결과", projectTable))
                 End If
 
-                Dim requestedAutoFit As Boolean = String.Equals(excelMode, "normal", StringComparison.OrdinalIgnoreCase)
-                LogAutoFitDecision(requestedAutoFit, "GuidAuditExport")
-                Dim saved = GuidAuditService.ExportMulti(sheetList, excelMode, "guid:progress")
+                Dim doAutoFit As Boolean = ParseExcelMode(payload)
+                Dim isFastMode As Boolean = String.Equals(excelMode, "fast", StringComparison.OrdinalIgnoreCase)
+                Dim exportMode As String = If(isFastMode, "fast", If(doAutoFit, "normal", "fast"))
+                LogAutoFitDecision(doAutoFit, "GuidAuditExport")
+                Dim saved = GuidAuditService.ExportMulti(sheetList, exportMode, "guid:progress")
                 If String.IsNullOrWhiteSpace(saved) Then
                     SendToWeb("guid:error", New With {.message = "엑셀 내보내기가 취소되었습니다."})
                     Return
                 End If
+                Infrastructure.ExcelExportStyleRegistry.ApplyStylesForKey("guid", saved, autoFit:=doAutoFit, excelMode:=exportMode)
                 SendToWeb("guid:exported", New With {.path = saved, .which = which})
             Catch ex As Exception
                 SendToWeb("guid:error", New With {.message = "엑셀 내보내기 실패: " & ex.Message})

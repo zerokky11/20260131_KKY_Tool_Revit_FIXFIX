@@ -1,4 +1,4 @@
-Imports System
+﻿Imports System
 Imports System.Collections
 Imports System.Collections.Generic
 Imports System.Data
@@ -159,6 +159,7 @@ Namespace Services
                 Return String.Empty
             End Try
 #End If
+            Return String.Empty
         End Function
 
     End Module
@@ -974,28 +975,99 @@ Namespace Services
                 Dim dt As New DataTable("SharedParamPropagate")
                 dt.Columns.Add("Type")
                 dt.Columns.Add("Family")
+                dt.Columns.Add("NestedParamName")
+                dt.Columns.Add("TargetParamName")
                 dt.Columns.Add("Detail")
 
                 If result.Details IsNot Nothing Then
                     For Each r In result.Details
+                        Dim nestedName As String = ""
+                        Dim targetName As String = ""
+                        ParseDetailParamNames(r, nestedName, targetName)
+
                         Dim row = dt.NewRow()
-                        row("Type") = r.Kind
-                        row("Family") = r.Family
-                        row("Detail") = r.Detail
+                        row("Type") = If(r.Kind, "")
+                        row("Family") = If(r.Family, "")
+                        row("NestedParamName") = nestedName
+                        row("TargetParamName") = targetName
+                        row("Detail") = If(r.Detail, "")
                         dt.Rows.Add(row)
                     Next
                 End If
 
-                If dt.Rows.Count = 0 Then
-                    Dim row = dt.NewRow()
-                    row(0) = "오류가 없습니다."
-                    dt.Rows.Add(row)
-                End If
+                Global.KKY_Tool_Revit.Infrastructure.ResultTableFilter.KeepOnlyIssues("paramprop", dt)
 
-                Infrastructure.ExcelCore.SaveXlsx(sfd.FileName, "Results", dt, doAutoFit, "paramprop:progress")
+                EnsureParamPropExportSchema(dt)
+                Infrastructure.ExcelCore.EnsureNoDataRow(dt, "오류가 없습니다.")
+
+                Infrastructure.ExcelCore.SaveXlsx(sfd.FileName, "Results", dt, doAutoFit, sheetKey:="paramprop", progressKey:="paramprop:progress")
+                Infrastructure.ExcelExportStyleRegistry.ApplyStylesForKey("paramprop", sfd.FileName, autoFit:=doAutoFit, excelMode:=If(doAutoFit, "normal", "fast"))
                 Return sfd.FileName
             End Using
         End Function
+
+
+        Private Shared Sub EnsureParamPropExportSchema(dt As DataTable)
+            If dt Is Nothing Then Return
+
+            If dt.Columns.Contains("HostParamGuid") Then
+                dt.Columns.Remove("HostParamGuid")
+            End If
+
+            If Not dt.Columns.Contains("NestedParamName") Then
+                dt.Columns.Add("NestedParamName")
+            End If
+            If Not dt.Columns.Contains("TargetParamName") Then
+                dt.Columns.Add("TargetParamName")
+            End If
+
+            Try
+                If dt.Columns.Contains("NestedParamName") AndAlso dt.Columns.Contains("TargetParamName") Then
+                    Dim targetOrdinal As Integer = dt.Columns("TargetParamName").Ordinal
+                    If targetOrdinal > 0 Then
+                        dt.Columns("NestedParamName").SetOrdinal(targetOrdinal - 1)
+                    Else
+                        dt.Columns("NestedParamName").SetOrdinal(0)
+                        dt.Columns("TargetParamName").SetOrdinal(1)
+                    End If
+                End If
+            Catch
+            End Try
+        End Sub
+
+        Private Shared Sub ParseDetailParamNames(detailRow As SharedParamDetailRow,
+                                                 ByRef nestedParamName As String,
+                                                 ByRef targetParamName As String)
+            nestedParamName = ""
+            targetParamName = ""
+            If detailRow Is Nothing Then Return
+
+            Dim familyText As String = If(detailRow.Family, "")
+            Dim detailText As String = If(detailRow.Detail, "")
+
+            Dim candidate As String = ""
+            If Not String.IsNullOrWhiteSpace(detailText) Then
+                Dim p = detailText.IndexOf(":"c)
+                If p >= 0 AndAlso p < detailText.Length - 1 Then
+                    candidate = detailText.Substring(p + 1).Trim()
+                Else
+                    candidate = detailText.Trim()
+                End If
+            End If
+            If String.IsNullOrWhiteSpace(candidate) Then
+                candidate = familyText.Trim()
+            End If
+
+            If Not String.IsNullOrWhiteSpace(candidate) Then
+                Dim spacePos = candidate.IndexOf(" "c)
+                If spacePos > 0 Then
+                    candidate = candidate.Substring(0, spacePos).Trim()
+                End If
+            End If
+
+            targetParamName = candidate
+            nestedParamName = candidate
+        End Sub
 
         '==================== 핵심 실행 (이름 기반 계층 + 역순 처리) ====================
         Private Shared Function ExecuteCore(doc As Document,

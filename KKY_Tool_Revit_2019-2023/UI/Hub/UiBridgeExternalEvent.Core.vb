@@ -3,6 +3,7 @@ Option Strict On
 
 Imports System
 Imports System.Collections.Generic
+Imports System.Data
 Imports System.Diagnostics
 Imports System.IO
 Imports System.Reflection
@@ -249,16 +250,27 @@ Namespace UI.Hub
         End Sub
 
         Friend Shared Function ParseExcelMode(payload As Object) As Boolean
+            Dim mode As String = "normal"
+
             Try
-                Dim mode As String = Nothing
                 If payload IsNot Nothing Then
-                    Dim prop = GetProp(payload, "excelMode")
-                    If prop IsNot Nothing Then mode = Convert.ToString(prop)
+                    Dim modeProp = GetProp(payload, "excelMode")
+                    If modeProp IsNot Nothing Then
+                        Dim raw = Convert.ToString(modeProp)
+                        If Not String.IsNullOrWhiteSpace(raw) Then mode = raw
+                    End If
                 End If
-                If String.Equals(mode, "normal", StringComparison.OrdinalIgnoreCase) Then Return True
             Catch
             End Try
-            Return False
+
+            Return Not String.Equals(mode, "fast", StringComparison.OrdinalIgnoreCase)
+        End Function
+
+        Friend Shared Function FilterIssueRowsCopy(styleKey As String, table As DataTable) As DataTable
+            If table Is Nothing Then Return Nothing
+            Dim copy As DataTable = table.Copy()
+            Global.KKY_Tool_Revit.Infrastructure.ResultTableFilter.KeepOnlyIssues(styleKey, copy)
+            Return copy
         End Function
 
         ' payload 속성 안전 추출(익명/Dictionary 수용)

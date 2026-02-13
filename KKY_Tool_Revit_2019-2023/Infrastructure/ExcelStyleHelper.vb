@@ -25,16 +25,15 @@ Namespace Infrastructure
 
         Private Function GetStyleSet(wb As IWorkbook) As StyleSet
             If wb Is Nothing Then Throw New ArgumentNullException(NameOf(wb))
-            ' VB에서 Function(_) 는 식별자 오류가 날 수 있어 정상 이름으로 변경
-            Return _wbStyles.GetValue(wb, Function(key) CreateStyleSet(key, True))
+            Return _wbStyles.GetValue(wb, Function(key) CreateStyleSet(key))
         End Function
 
         Private Function GetNoWrapStyleSet(wb As IWorkbook) As StyleSet
             If wb Is Nothing Then Throw New ArgumentNullException(NameOf(wb))
-            Return _wbNoWrapStyles.GetValue(wb, Function(key) CreateStyleSet(key, False))
+            Return _wbNoWrapStyles.GetValue(wb, Function(key) CreateStyleSet(key))
         End Function
 
-        Private Function CreateStyleSet(wb As IWorkbook, wrapText As Boolean) As StyleSet
+        Private Function CreateStyleSet(wb As IWorkbook) As StyleSet
             Dim setx As New StyleSet()
 
             ' Header
@@ -45,7 +44,7 @@ Namespace Infrastructure
             header.SetFont(hf)
             header.Alignment = HorizontalAlignment.Center
             header.VerticalAlignment = VerticalAlignment.Center
-            header.WrapText = wrapText
+            header.WrapText = False
             header.FillForegroundColor = IndexedColors.Grey50Percent.Index
             header.FillPattern = FillPattern.SolidForeground
             header.BorderBottom = BorderStyle.Thin
@@ -55,20 +54,20 @@ Namespace Infrastructure
             setx.HeaderStyle = header
 
             ' Info
-            setx.InfoStyle = CreateFillStyle(wb, IndexedColors.LightCornflowerBlue.Index, wrapText)
+            setx.InfoStyle = CreateFillStyle(wb, IndexedColors.LightCornflowerBlue.Index)
 
             ' Warning
-            setx.WarningStyle = CreateFillStyle(wb, IndexedColors.LightYellow.Index, wrapText)
+            setx.WarningStyle = CreateFillStyle(wb, IndexedColors.LightYellow.Index)
 
             ' Error
-            setx.ErrorStyle = CreateFillStyle(wb, IndexedColors.Rose.Index, wrapText)
+            setx.ErrorStyle = CreateFillStyle(wb, IndexedColors.Rose.Index)
 
             Return setx
         End Function
 
-        Private Function CreateFillStyle(wb As IWorkbook, fillColor As Short, wrapText As Boolean) As ICellStyle
+        Private Function CreateFillStyle(wb As IWorkbook, fillColor As Short) As ICellStyle
             Dim s = wb.CreateCellStyle()
-            s.WrapText = wrapText
+            s.WrapText = False
             s.VerticalAlignment = VerticalAlignment.Center
             s.FillForegroundColor = fillColor
             s.FillPattern = FillPattern.SolidForeground

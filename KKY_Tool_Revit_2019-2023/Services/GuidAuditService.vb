@@ -1,4 +1,4 @@
-Option Explicit On
+﻿Option Explicit On
 Option Strict On
 
 Imports System
@@ -8,6 +8,7 @@ Imports System.IO
 Imports System.Linq
 Imports System.Reflection
 Imports System.Text.RegularExpressions
+Imports System.Windows.Forms
 Imports Autodesk.Revit.DB
 Imports Autodesk.Revit.UI
 Imports KKY_Tool_Revit.Infrastructure
@@ -144,6 +145,20 @@ Namespace Services
                 End Try
             Next
 
+            ResultTableFilter.KeepOnlyIssues("guid", projectTable)
+            If includeFamily Then
+                ResultTableFilter.KeepOnlyIssues("guid", familyDetail)
+
+                Dim famSet As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
+                If familyDetail IsNot Nothing AndAlso familyDetail.Columns.Contains("FamilyName") Then
+                    For Each r As DataRow In familyDetail.Rows
+                        Dim fn As String = Convert.ToString(r("FamilyName")).Trim()
+                        If Not String.IsNullOrWhiteSpace(fn) Then famSet.Add(fn)
+                    Next
+                End If
+                ResultTableFilter.KeepOnlyByNameSet(famIndex, "FamilyName", famSet)
+            End If
+
             Dim res As New RunResult() With {
                 .Mode = mode,
                 .Project = If(projectTable, Auditors.MakeFailureSummaryTable(1)),
@@ -169,7 +184,16 @@ Namespace Services
             Catch
                 doAutoFit = False
             End Try
-            Return ExcelCore.PickAndSaveXlsx(sheetName, table, $"{sheetName}_{DateTime.Now:yyyyMMdd_HHmm}.xlsx", doAutoFit, progressChannel)
+            ResultTableFilter.KeepOnlyIssues("guid", table)
+            ExcelCore.EnsureMessageRow(table, "오류가 없습니다.")
+
+            Using sfd As New SaveFileDialog()
+                sfd.Filter = "Excel Workbook (*.xlsx)|*.xlsx"
+                sfd.FileName = $"{sheetName}_{DateTime.Now:yyyyMMdd_HHmm}.xlsx"
+                If sfd.ShowDialog() <> DialogResult.OK Then Return String.Empty
+                ExcelCore.SaveXlsx(sfd.FileName, sheetName, table, doAutoFit, sheetKey:=sheetName, progressKey:=progressChannel)
+                Return sfd.FileName
+            End Using
         End Function
 
         ''' <summary>엑셀 내보내기 (다중 시트)</summary>
@@ -185,8 +209,18 @@ Namespace Services
             Catch
                 doAutoFit = False
             End Try
-            Dim fileName As String = $"GuidAudit_{DateTime.Now:yyyyMMdd_HHmm}.xlsx"
-            Return ExcelCore.PickAndSaveXlsxMulti(sheets, fileName, doAutoFit, progressChannel)
+            For Each kv In sheets
+                ResultTableFilter.KeepOnlyIssues("guid", kv.Value)
+                ExcelCore.EnsureMessageRow(kv.Value, "오류가 없습니다.")
+            Next
+
+            Using sfd As New SaveFileDialog()
+                sfd.Filter = "Excel Workbook (*.xlsx)|*.xlsx"
+                sfd.FileName = $"GuidAudit_{DateTime.Now:yyyyMMdd_HHmm}.xlsx"
+                If sfd.ShowDialog() <> DialogResult.OK Then Return String.Empty
+                ExcelCore.SaveXlsxMulti(sfd.FileName, sheets, doAutoFit, progressChannel)
+                Return sfd.FileName
+            End Using
         End Function
 
         Public Shared Function PrepareExportTable(source As DataTable, mode As Integer) As DataTable
@@ -199,13 +233,17 @@ Namespace Services
                 Next
             End If
 
-            If exportTable.Rows.Count = 0 Then
-                Dim row = exportTable.NewRow()
-                If exportTable.Columns.Count > 0 Then
-                    row(0) = "오류가 없습니다."
-                End If
-                exportTable.Rows.Add(row)
+            ResultTableFilter.KeepOnlyIssues("guid", exportTable)
+
+            If exportTable.Columns.Contains("RvtPath") Then
+                exportTable.Columns.Remove("RvtPath")
             End If
+
+            If exportTable.Columns.Contains("BoundCategories") Then
+                exportTable.Columns("BoundCategories").SetOrdinal(exportTable.Columns.Count - 1)
+            End If
+
+            ExcelCore.EnsureMessageRow(exportTable, "오류가 없습니다.")
 
             Return exportTable
         End Function
@@ -553,6 +591,8 @@ Namespace Services
                     dt.Columns.Add("RvtPath", GetType(String))
                     dt.Columns.Add("ParamName", GetType(String))
                     dt.Columns.Add("ParamKind", GetType(String))
+                    dt.Columns.Add("ParamGroup", GetType(String))
+                    dt.Columns.Add("BoundCategories", GetType(String))
                     dt.Columns.Add("RvtGuid", GetType(String))
                     dt.Columns.Add("FileGuid", GetType(String))
                     dt.Columns.Add("Result", GetType(String))
@@ -582,6 +622,8 @@ Namespace Services
                 If dt.Columns.Contains("FamilyCategory") Then r("FamilyCategory") = ""
                 If dt.Columns.Contains("ParamName") Then r("ParamName") = ""
                 If dt.Columns.Contains("ParamKind") Then r("ParamKind") = ""
+                If dt.Columns.Contains("ParamGroup") Then r("ParamGroup") = ""
+                If dt.Columns.Contains("BoundCategories") Then r("BoundCategories") = ""
                 If dt.Columns.Contains("RvtGuid") Then r("RvtGuid") = ""
                 If dt.Columns.Contains("IsShared") Then r("IsShared") = ""
                 If dt.Columns.Contains("FamilyGuid") Then r("FamilyGuid") = ""
@@ -602,10 +644,14 @@ Namespace Services
                 dt.Columns.Add("RvtPath", GetType(String))
                 dt.Columns.Add("ParamName", GetType(String))
                 dt.Columns.Add("ParamKind", GetType(String))
+                dt.Columns.Add("ParamGroup", GetType(String))
+                dt.Columns.Add("BoundCategories", GetType(String))
                 dt.Columns.Add("RvtGuid", GetType(String))
                 dt.Columns.Add("FileGuid", GetType(String))
                 dt.Columns.Add("Result", GetType(String))
                 dt.Columns.Add("Notes", GetType(String))
+
+                Dim allowedCategoryNames As HashSet(Of String) = BuildAllowedCategoryNameSet(doc)
 
                 Dim speByName As New Dictionary(Of String, List(Of Guid))(StringComparer.OrdinalIgnoreCase)
                 Try
@@ -737,12 +783,18 @@ Namespace Services
                     r("RvtPath") = If(rvtPath, "")
                     r("ParamName") = name
                     r("ParamKind") = kind
+                    r("ParamGroup") = SafeParameterGroupName(def)
+                    r("BoundCategories") = FormatBoundCategories(binding, allowedCategoryNames)
                     r("RvtGuid") = projGuid
                     r("FileGuid") = fileGuid
                     r("Result") = result
                     r("Notes") = notes
                     dt.Rows.Add(r)
                 End While
+
+                If dt.Columns.Contains("BoundCategories") Then
+                    dt.Columns("BoundCategories").SetOrdinal(dt.Columns.Count - 1)
+                End If
 
                 Return dt
             End Function
@@ -752,6 +804,143 @@ Namespace Services
                 If String.IsNullOrWhiteSpace(note) Then Return existing
                 Return existing & "; " & note
             End Function
+
+            Private Shared Function SafeParameterGroupName(def As Definition) As String
+                Try
+                    Dim idef = TryCast(def, InternalDefinition)
+                    If idef IsNot Nothing Then
+                        Dim pg As BuiltInParameterGroup = idef.ParameterGroup
+                        Try
+                            Dim label As String = LabelUtils.GetLabelFor(pg)
+                            If Not String.IsNullOrWhiteSpace(label) Then Return label
+                        Catch
+                        End Try
+                        Return pg.ToString()
+                    End If
+                Catch
+                End Try
+                Return ""
+            End Function
+
+            Private Shared Function FormatBoundCategories(binding As ElementBinding,
+                                                          allowedCategoryNames As HashSet(Of String)) As String
+                If binding Is Nothing OrElse binding.Categories Is Nothing Then Return ""
+                If allowedCategoryNames Is Nothing OrElse allowedCategoryNames.Count = 0 Then Return ""
+
+                Dim topLevelNames As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
+                Dim subByTop As New Dictionary(Of String, HashSet(Of String))(StringComparer.OrdinalIgnoreCase)
+
+                For Each cat As Category In binding.Categories
+                    If cat Is Nothing Then Continue For
+
+                    Dim currentName As String = SafeCategoryName(cat)
+                    If String.IsNullOrWhiteSpace(currentName) Then Continue For
+
+                    Dim parent As Category = Nothing
+                    Try
+                        parent = cat.Parent
+                    Catch
+                        parent = Nothing
+                    End Try
+
+                    If parent Is Nothing Then
+                        If allowedCategoryNames.Contains(currentName) Then
+                            topLevelNames.Add(currentName)
+                        End If
+                        Continue For
+                    End If
+
+                    Dim parentName As String = SafeCategoryName(parent)
+                    If String.IsNullOrWhiteSpace(parentName) Then Continue For
+                    If Not allowedCategoryNames.Contains(parentName) Then Continue For
+
+                    topLevelNames.Add(parentName)
+                    If Not subByTop.ContainsKey(parentName) Then
+                        subByTop(parentName) = New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
+                    End If
+                    subByTop(parentName).Add(currentName)
+                Next
+
+                Dim labels As New List(Of String)()
+                For Each top In topLevelNames.OrderBy(Function(x) x, StringComparer.OrdinalIgnoreCase)
+                    labels.Add($"[{top}]")
+
+                    Dim subs As HashSet(Of String) = Nothing
+                    If subByTop.TryGetValue(top, subs) AndAlso subs IsNot Nothing Then
+                        For Each subName In subs.OrderBy(Function(x) x, StringComparer.OrdinalIgnoreCase)
+                            labels.Add($"[{top}: {subName}]")
+                        Next
+                    End If
+                Next
+
+                Return String.Join(",", labels.ToArray())
+            End Function
+
+            Private Shared Function SafeCategoryName(cat As Category) As String
+                If cat Is Nothing Then Return ""
+                Try
+                    Dim name As String = If(cat.Name, "")
+                    If String.IsNullOrWhiteSpace(name) Then Return ""
+                    Return name.Trim()
+                Catch
+                    Return ""
+                End Try
+            End Function
+
+            Private Shared Function BuildAllowedCategoryNameSet(doc As Document) As HashSet(Of String)
+                Dim result As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
+                If doc Is Nothing Then Return result
+
+                Dim cats As Categories = Nothing
+                Try
+                    cats = doc.Settings.Categories
+                Catch
+                    cats = Nothing
+                End Try
+                If cats Is Nothing Then Return result
+
+                For Each cat As Category In cats
+                    AddAllowedCategoryName(cat, result)
+
+                    Try
+                        Dim subs As CategoryNameMap = cat.SubCategories
+                        If subs IsNot Nothing Then
+                            For Each subCat As Category In subs
+                                AddAllowedCategoryName(subCat, result)
+                            Next
+                        End If
+                    Catch
+                    End Try
+                Next
+
+                Return result
+            End Function
+
+            Private Shared Sub AddAllowedCategoryName(cat As Category, allowedNames As HashSet(Of String))
+                If cat Is Nothing OrElse allowedNames Is Nothing Then Return
+
+                Dim name As String = ""
+                Try
+                    name = If(cat.Name, "")
+                Catch
+                    name = ""
+                End Try
+                If String.IsNullOrWhiteSpace(name) Then Return
+
+                Dim trimmed As String = name.Trim()
+                If trimmed.StartsWith("<", StringComparison.OrdinalIgnoreCase) Then Return
+                If trimmed.IndexOf("line style", StringComparison.OrdinalIgnoreCase) >= 0 Then Return
+
+                Dim canBind As Boolean = False
+                Try
+                    canBind = cat.AllowsBoundParameters
+                Catch
+                    canBind = False
+                End Try
+                If Not canBind Then Return
+
+                allowedNames.Add(trimmed)
+            End Sub
 
             Public Shared Function RunFamilyAudit(doc As Document,
                                                   fileMap As Dictionary(Of String, List(Of Guid)),

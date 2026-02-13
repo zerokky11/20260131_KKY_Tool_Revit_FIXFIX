@@ -1,4 +1,4 @@
-Option Explicit On
+﻿Option Explicit On
 Option Strict On
 
 Imports System
@@ -7,6 +7,7 @@ Imports System.Collections.Generic
 Imports System.IO
 Imports System.Linq
 Imports System.Windows.Forms
+Imports System.Data
 Imports Autodesk.Revit.DB
 Imports Autodesk.Revit.UI
 Imports KKY_Tool_Revit.Exports
@@ -125,10 +126,11 @@ Namespace UI.Hub
 
             Try
                 Dim rows As List(Of FamilyLinkAuditRow) = FamilyLinkAuditService.Run(app, rvtPaths, targets, AddressOf ReportFamilyLinkProgress)
-                _familyLinkLastRows = rows
+                Dim filteredRows As List(Of FamilyLinkAuditRow) = FilterFamilyLinkIssueRows(rows)
+                _familyLinkLastRows = filteredRows
 
                 Dim schema As String() = FamilyLinkAuditExport.Schema
-                Dim payloadRows As List(Of Dictionary(Of String, Object)) = rows.Select(AddressOf ToRowDict).ToList()
+                Dim payloadRows As List(Of Dictionary(Of String, Object)) = filteredRows.Select(AddressOf ToRowDict).ToList()
 
                 SendToWeb("familylink:result", New With {
                     .schema = schema,
@@ -143,6 +145,40 @@ Namespace UI.Hub
             End Try
         End Sub
 
+        Private Function FilterFamilyLinkIssueRows(rows As List(Of FamilyLinkAuditRow)) As List(Of FamilyLinkAuditRow)
+            If rows Is Nothing Then Return New List(Of FamilyLinkAuditRow)()
+
+            Dim table As DataTable = FamilyLinkAuditExport.ToDataTable(rows)
+            Dim filteredTable As DataTable = FilterIssueRowsCopy("familylink", table)
+
+            Dim result As New List(Of FamilyLinkAuditRow)()
+            If filteredTable Is Nothing Then Return result
+
+            For Each dr As DataRow In filteredTable.Rows
+                result.Add(New FamilyLinkAuditRow With {
+                    .FileName = SafeStr(Convert.ToString(dr("FileName"))),
+                    .HostFamilyName = SafeStr(Convert.ToString(dr("HostFamilyName"))),
+                    .HostFamilyCategory = SafeStr(Convert.ToString(dr("HostFamilyCategory"))),
+                    .NestedFamilyName = SafeStr(Convert.ToString(dr("NestedFamilyName"))),
+                    .NestedTypeName = SafeStr(Convert.ToString(dr("NestedTypeName"))),
+                    .NestedCategory = SafeStr(Convert.ToString(dr("NestedCategory"))),
+                    .NestedParamName = SafeStr(Convert.ToString(dr("NestedParamName"))),
+                    .TargetParamName = SafeStr(Convert.ToString(dr("TargetParamName"))),
+                    .ExpectedGuid = SafeStr(Convert.ToString(dr("ExpectedGuid"))),
+                    .FoundScope = SafeStr(Convert.ToString(dr("FoundScope"))),
+                    .NestedParamGuid = SafeStr(Convert.ToString(dr("NestedParamGuid"))),
+                    .NestedParamDataType = SafeStr(Convert.ToString(dr("NestedParamDataType"))),
+                    .AssocHostParamName = SafeStr(Convert.ToString(dr("AssocHostParamName"))),
+                    .HostParamGuid = SafeStr(Convert.ToString(dr("HostParamGuid"))),
+                    .HostParamIsShared = SafeStr(Convert.ToString(dr("HostParamIsShared"))),
+                    .Issue = SafeStr(Convert.ToString(dr("Issue"))),
+                    .Notes = SafeStr(Convert.ToString(dr("Notes")))
+                })
+            Next
+
+            Return result
+        End Function
+
         Private Sub HandleFamilyLinkExport(payload As Object)
             If _familyLinkLastRows Is Nothing Then
                 SendToWeb("familylink:error", New With {
@@ -153,7 +189,9 @@ Namespace UI.Hub
             End If
 
             Dim fastExport As Boolean = ExtractBool(payload, "fastExport", True)
-            Dim autoFit As Boolean = ExtractBool(payload, "autoFit", False)
+            Dim autoFit As Boolean = ParseExcelMode(payload)
+            If ExtractBool(payload, "fastExport", False) Then autoFit = False
+            fastExport = Not autoFit
 
             Try
                 Dim savedPath As String = FamilyLinkAuditExport.Export(_familyLinkLastRows, fastExport, autoFit)

@@ -1,4 +1,4 @@
-Option Explicit On
+﻿Option Explicit On
 Option Strict On
 
 Imports System.Data
@@ -20,13 +20,13 @@ Namespace Exports
             "NestedFamilyName",
             "NestedTypeName",
             "NestedCategory",
+            "NestedParamName",
             "TargetParamName",
             "ExpectedGuid",
             "FoundScope",
             "NestedParamGuid",
             "NestedParamDataType",
             "AssocHostParamName",
-            "HostParamGuid",
             "HostParamIsShared",
             "Issue",
             "Notes"
@@ -34,7 +34,9 @@ Namespace Exports
 
         Public Function Export(rows As IEnumerable(Of FamilyLinkAuditRow), Optional fastExport As Boolean = True, Optional autoFit As Boolean = False) As String
             If rows Is Nothing Then Return String.Empty
-            Dim table As DataTable = BuildTable(rows)
+            Dim table As DataTable = ToDataTable(rows)
+            Global.KKY_Tool_Revit.Infrastructure.ResultTableFilter.KeepOnlyIssues("familylink", table)
+            ExcelCore.EnsureMessageRow(table, "오류가 없습니다.")
             If Not ValidateSchema(table) Then
                 Throw New InvalidOperationException("스키마 검증 실패: 컬럼 순서/헤더가 규격과 다릅니다.")
             End If
@@ -61,10 +63,16 @@ Namespace Exports
                     SaveCsv(filePath, table)
                 Else
                     Dim doAutoFit As Boolean = (Not fastExport) AndAlso autoFit
+                    Dim excelMode As String = If(fastExport, "fast", "normal")
                     ExcelCore.SaveXlsx(filePath, "FamilyLinkAudit", table, doAutoFit)
+                    ExcelExportStyleRegistry.ApplyStylesForKey("familylink", filePath, autoFit:=doAutoFit, excelMode:=excelMode)
                 End If
                 Return filePath
             End Using
+        End Function
+
+        Public Function ToDataTable(rows As IEnumerable(Of FamilyLinkAuditRow)) As DataTable
+            Return BuildTable(rows)
         End Function
 
         Private Function BuildTable(rows As IEnumerable(Of FamilyLinkAuditRow)) As DataTable
@@ -81,24 +89,18 @@ Namespace Exports
                 dr("NestedFamilyName") = SafeStr(r.NestedFamilyName)
                 dr("NestedTypeName") = SafeStr(r.NestedTypeName)
                 dr("NestedCategory") = SafeStr(r.NestedCategory)
+                dr("NestedParamName") = SafeStr(r.NestedParamName)
                 dr("TargetParamName") = SafeStr(r.TargetParamName)
                 dr("ExpectedGuid") = SafeStr(r.ExpectedGuid)
                 dr("FoundScope") = SafeStr(r.FoundScope)
                 dr("NestedParamGuid") = SafeStr(r.NestedParamGuid)
                 dr("NestedParamDataType") = SafeStr(r.NestedParamDataType)
                 dr("AssocHostParamName") = SafeStr(r.AssocHostParamName)
-                dr("HostParamGuid") = SafeStr(r.HostParamGuid)
                 dr("HostParamIsShared") = SafeStr(r.HostParamIsShared)
                 dr("Issue") = SafeStr(r.Issue)
                 dr("Notes") = SafeStr(r.Notes)
                 dt.Rows.Add(dr)
             Next
-
-            If dt.Rows.Count = 0 Then
-                Dim dr = dt.NewRow()
-                dr("FileName") = "오류가 없습니다."
-                dt.Rows.Add(dr)
-            End If
 
             Return dt
         End Function

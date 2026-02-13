@@ -5,8 +5,6 @@ Imports System.IO
 Imports System.Diagnostics
 Imports Autodesk.Revit.UI
 Imports KKY_Tool_Revit.Services
-Imports NPOI.SS.UserModel
-Imports NPOI.XSSF.UserModel
 
 Namespace UI.Hub
     Partial Public Class UiBridgeExternalEvent
@@ -90,6 +88,7 @@ Namespace UI.Hub
             ResetExportProgressState()
             Try
                 Dim doAutoFit As Boolean = ParseExcelMode(payload)
+                Dim excelMode As String = ExtractExcelMode(payload, doAutoFit)
                 Dim unit As String = ExtractUnit(payload)
                 Dim rows = TryGetRowsFromPayload(payload)
                 If rows Is Nothing OrElse rows.Count = 0 Then rows = Export_LastExportRows
@@ -100,7 +99,7 @@ Namespace UI.Hub
                 Dim dt = BuildExportDataTableFromRows(rows, unit, True)
                 Dim todayToken As String = Date.Now.ToString("yyMMdd")
                 Dim defaultName As String = $"{todayToken}_좌표 추출 결과.xlsx"
-                Dim savePath As String = SaveExcelWithDialog(dt, defaultName, doAutoFit)
+                Dim savePath As String = SaveExcelWithDialog(dt, defaultName, doAutoFit, excelMode)
 
                 If Not String.IsNullOrEmpty(savePath) Then
                     ReportExportProgress("DONE", "엑셀 내보내기 완료", total, total, 1.0, True)
@@ -203,11 +202,6 @@ Namespace UI.Hub
             Next
             If total = 0 Then
                 ReportExportProgress("EXCEL", "엑셀 데이터 구성", 0, 0, 0.0, False)
-            End If
-            If dt.Rows.Count = 0 Then
-                Dim dr = dt.NewRow()
-                dr(0) = "오류가 없습니다."
-                dt.Rows.Add(dr)
             End If
             Return dt
         End Function
@@ -370,6 +364,17 @@ Namespace UI.Hub
             Return "ft"
         End Function
 
+        Private Shared Function ExtractExcelMode(payload As Dictionary(Of String, Object), doAutoFit As Boolean) As String
+            If payload IsNot Nothing Then
+                Dim v As Object = Nothing
+                If payload.TryGetValue("excelMode", v) AndAlso v IsNot Nothing Then
+                    Dim mode As String = Convert.ToString(v, Globalization.CultureInfo.InvariantCulture)
+                    If Not String.IsNullOrWhiteSpace(mode) Then Return mode.Trim().ToLowerInvariant()
+                End If
+            End If
+            Return If(doAutoFit, "normal", "fast")
+        End Function
+
         ' DataTable → rows
         Private Shared Function DataTableToRows(dt As DataTable) As List(Of Dictionary(Of String, Object))
             Dim list As New List(Of Dictionary(Of String, Object))()
@@ -423,70 +428,41 @@ Namespace UI.Hub
             Return New List(Of Dictionary(Of String, Object))()
         End Function
 
-        ' DataTable을 저장 대화상자로 엑셀로 저장하고 경로 반환(취소 시 "")
-        Private Shared Function SaveExcelWithDialog(dt As DataTable, Optional defaultName As String = "export.xlsx", Optional doAutoFit As Boolean = False) As String
+        ' DataTable을 공통 파이프라인으로 저장하고 경로 반환(취소 시 "")
+        Private Shared Function SaveExcelWithDialog(dt As DataTable, Optional defaultName As String = "export.xlsx", Optional doAutoFit As Boolean = False, Optional excelMode As String = "fast") As String
             If dt Is Nothing OrElse dt.Columns.Count = 0 Then Return String.Empty
+
             Dim dlg As New Microsoft.Win32.SaveFileDialog() With {
                 .Filter = "Excel (*.xlsx)|*.xlsx",
                 .FileName = defaultName
             }
             Dim ok = dlg.ShowDialog()
             If ok <> True Then Return String.Empty
+
             Dim path = dlg.FileName
             Dim totalRows As Integer = dt.Rows.Count
-            Dim writtenRows As Integer = 0
-                ReportExportProgress("EXCEL_INIT", "엑셀 워크북 준비", 0, totalRows, 0.0, True)
-                LogAutoFitDecision(doAutoFit, "UiBridgeExternalEvent.SaveExcelWithDialog")
-                Try
-                    Dim wb As IWorkbook = New XSSFWorkbook()
-                    Dim sh = wb.CreateSheet("Export")
-                Dim xssf = TryCast(wb, XSSFWorkbook)
-                Dim baseStyle As ICellStyle = If(xssf IsNot Nothing, CreateBorderedStyle(xssf), Nothing)
-                Dim headerStyle As ICellStyle = If(xssf IsNot Nothing, CreateHeaderStyle(xssf, baseStyle), Nothing)
+            ReportExportProgress("EXCEL_INIT", "엑셀 워크북 준비", 0, totalRows, 0.0, True)
+            LogAutoFitDecision(doAutoFit, "UiBridgeExternalEvent.SaveExcelWithDialog")
 
-                ' 헤더
-                Dim hr = sh.CreateRow(0)
-                For c = 0 To dt.Columns.Count - 1
-                    Dim cell = hr.CreateCell(c)
-                    cell.SetCellValue(dt.Columns(c).ColumnName)
-                    If headerStyle IsNot Nothing Then cell.CellStyle = headerStyle
-                Next
-                ' 데이터
-                Dim rIndex = 1
-                For Each dr As DataRow In dt.Rows
-                    Dim rr = sh.CreateRow(rIndex) : rIndex += 1
-                    For c = 0 To dt.Columns.Count - 1
-                        Dim v = If(dr.IsNull(c), "", Convert.ToString(dr(c), Globalization.CultureInfo.InvariantCulture))
-                        Dim cell = rr.CreateCell(c)
-                        cell.SetCellValue(v)
-                        If baseStyle IsNot Nothing Then cell.CellStyle = baseStyle
-                    Next
-                    writtenRows += 1
-                    ReportExportProgress("EXCEL_WRITE", "엑셀 데이터 작성", writtenRows, totalRows, If(totalRows > 0, CDbl(writtenRows) / CDbl(totalRows), 1.0), False)
-                Next
+            Try
+                If dt.Rows.Count = 0 Then
+                    Global.KKY_Tool_Revit.Infrastructure.ExcelCore.EnsureNoDataRow(dt, "추출 결과가 없습니다.")
+                    totalRows = dt.Rows.Count
+                End If
+
                 ReportExportProgress("EXCEL_WRITE", "엑셀 데이터 작성", totalRows, totalRows, 1.0, True)
-                ' 자동 너비
-                If doAutoFit Then
-                    For c = 0 To dt.Columns.Count - 1
-                        sh.AutoSizeColumn(c)
-                    Next
-                End If
                 ReportExportProgress("EXCEL_SAVE", "엑셀 파일 내보내기", totalRows, totalRows, 1.0, True)
-                Using fs As New FileStream(path, FileMode.Create, FileAccess.Write)
-                    wb.Write(fs)
-                End Using
+
+                Global.KKY_Tool_Revit.Infrastructure.ExcelCore.SaveXlsx(path, "Export", dt, doAutoFit, sheetKey:="Export", progressKey:="export:progress", exportKind:="points")
+                Global.KKY_Tool_Revit.Infrastructure.ExcelExportStyleRegistry.ApplyStylesForKey("points", path, autoFit:=doAutoFit, excelMode:=excelMode)
+
                 Dim autoFitMessage As String = If(doAutoFit, "AutoFit 적용", "빠른 모드: AutoFit 생략")
-                If doAutoFit Then
-                    ReportExportProgress("AUTOFIT", autoFitMessage, totalRows, totalRows, 1.0, True)
-                    Global.KKY_Tool_Revit.Infrastructure.ExcelCore.TryAutoFitWithExcel(path)
-                Else
-                    ReportExportProgress("AUTOFIT", autoFitMessage, totalRows, totalRows, 1.0, True)
-                End If
+                ReportExportProgress("AUTOFIT", autoFitMessage, totalRows, totalRows, 1.0, True)
                 ReportExportProgress("DONE", "엑셀 내보내기 완료", totalRows, totalRows, 1.0, True)
                 Return path
             Catch ex As Exception
                 _host?.SendToWeb("host:error", New With {.message = "엑셀 내보내기 실패: " & ex.Message})
-                ReportExportProgress("ERROR", ex.Message, writtenRows, totalRows, 0.0, True)
+                ReportExportProgress("ERROR", ex.Message, 0, totalRows, 0.0, True)
                 Return String.Empty
             End Try
         End Function

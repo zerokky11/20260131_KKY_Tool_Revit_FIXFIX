@@ -626,7 +626,6 @@ Namespace UI.Hub
             Global.KKY_Tool_Revit.UI.Hub.ExcelProgressReporter.Reset(progressChannel)
             Global.KKY_Tool_Revit.UI.Hub.ExcelProgressReporter.Report(progressChannel, "EXCEL_INIT", "엑셀 워크북 준비", 0, totalCount, Nothing, True)
             LogAutoFitDecision(doAutoFit, "UiBridgeExternalEvent.SaveRowsToExcel")
-            Dim written As Integer = 0
 
             Try
                 Using sfd As New SaveFileDialog()
@@ -634,47 +633,98 @@ Namespace UI.Hub
                     sfd.FileName = defaultName
                     If sfd.ShowDialog() <> DialogResult.OK Then Throw New OperationCanceledException()
 
-                    Dim savePath = sfd.FileName
-                    Using fs As New FileStream(savePath, FileMode.Create, FileAccess.Write, FileShare.None)
-                        Using wb As New XSSFWorkbook()
-                            Dim extrasSource As List(Of String) = If(extraParams, New List(Of String)())
-                            If (extrasSource Is Nothing OrElse extrasSource.Count = 0) AndAlso totalRows IsNot Nothing AndAlso totalRows.Count > 0 Then
-                                extrasSource = InferExtrasFromRow(totalRows(0))
-                            End If
-                            Dim extrasHeaders = BuildExtraHeaders(extrasSource)
-
-                            Dim headersTotal = BuildHeaders(extrasHeaders)
-                            Dim baseStyle As ICellStyle = CreateBorderedStyle(wb)
-                            Dim headerStyle As ICellStyle = CreateHeaderStyle(wb, baseStyle)
-                            Dim mismatchStyle As ICellStyle = CreateFillStyle(wb, baseStyle, New Byte() {&HF8, &HD7, &HDA}) ' light red
-                            Dim matchStyle As ICellStyle = CreateFillStyle(wb, baseStyle, New Byte() {&HD1, &HE7, &HDD})   ' light green
-                            Dim nearStyle As ICellStyle = CreateFillStyle(wb, baseStyle, New Byte() {&HFF, &HF3, &HCD})    ' light yellow
-                            Dim errorStyle As ICellStyle = CreateFillStyle(wb, baseStyle, New Byte() {&HFF, &HE8, &HCC})   ' light orange
-
-                            Dim totalBase = totalRows.Select(Function(r) StripExtras(r, extrasHeaders)).ToList()
-                            WriteSheet(wb, "Total", headersTotal, totalBase, headerStyle, baseStyle, matchStyle, mismatchStyle, nearStyle, errorStyle, progressChannel, written, totalCount, doAutoFit, uiUnit)
-
-                            wb.Write(fs)
-                        End Using
-                    End Using
-                    Global.KKY_Tool_Revit.UI.Hub.ExcelProgressReporter.Report(progressChannel, "EXCEL_SAVE", "파일 저장 중", totalCount, totalCount, Nothing, True)
-                    Dim autoFitMessage As String = If(doAutoFit, "AutoFit 적용", "빠른 모드: AutoFit 생략")
-                    If doAutoFit Then
-                        Global.KKY_Tool_Revit.UI.Hub.ExcelProgressReporter.Report(progressChannel, "AUTOFIT", autoFitMessage, totalCount, totalCount, Nothing, True)
-                        Global.KKY_Tool_Revit.Infrastructure.ExcelCore.TryAutoFitWithExcel(savePath)
-                    Else
-                        Global.KKY_Tool_Revit.UI.Hub.ExcelProgressReporter.Report(progressChannel, "AUTOFIT", autoFitMessage, totalCount, totalCount, Nothing, True)
+                    Dim extrasSource As List(Of String) = If(extraParams, New List(Of String)())
+                    If (extrasSource Is Nothing OrElse extrasSource.Count = 0) AndAlso totalRows IsNot Nothing AndAlso totalRows.Count > 0 Then
+                        extrasSource = InferExtrasFromRow(totalRows(0))
                     End If
+                    Dim extrasHeaders = BuildExtraHeaders(extrasSource)
+                    Dim headersTotal = BuildHeaders(extrasHeaders)
+                    Dim totalBase = totalRows.Select(Function(r) StripExtras(r, extrasHeaders)).ToList()
+
+                    Dim dt As DataTable = BuildConnectorExportDataTable(headersTotal, totalBase, uiUnit)
+                    If dt.Rows.Count = 0 Then
+                        Global.KKY_Tool_Revit.Infrastructure.ExcelCore.EnsureNoDataRow(dt, "검토 결과가 없습니다.")
+                    End If
+
+                    Dim savePath = sfd.FileName
+                    Global.KKY_Tool_Revit.UI.Hub.ExcelProgressReporter.Report(progressChannel, "EXCEL_WRITE", "엑셀 데이터 작성", totalCount, totalCount, Nothing, True)
+                    Global.KKY_Tool_Revit.Infrastructure.ExcelCore.SaveXlsx(savePath,
+                                                                            "Connector Diagnostics",
+                                                                            dt,
+                                                                            doAutoFit,
+                                                                            sheetKey:="connector",
+                                                                            progressKey:=progressChannel,
+                                                                            exportKind:="connector")
+                    Global.KKY_Tool_Revit.Infrastructure.ExcelExportStyleRegistry.ApplyStylesForKey("connector", savePath, autoFit:=doAutoFit, excelMode:=If(doAutoFit, "normal", "fast"))
+
+                    Global.KKY_Tool_Revit.UI.Hub.ExcelProgressReporter.Report(progressChannel, "EXCEL_SAVE", "파일 저장 중", totalCount, totalCount, Nothing, True)
+                    Global.KKY_Tool_Revit.UI.Hub.ExcelProgressReporter.Report(progressChannel, "AUTOFIT", If(doAutoFit, "AutoFit 적용", "빠른 모드: AutoFit 생략"), totalCount, totalCount, Nothing, True)
                     Global.KKY_Tool_Revit.UI.Hub.ExcelProgressReporter.Report(progressChannel, "DONE", "엑셀 내보내기 완료", totalCount, totalCount, 100.0R, True)
                     Return savePath
                 End Using
             Catch ex As OperationCanceledException
-                Global.KKY_Tool_Revit.UI.Hub.ExcelProgressReporter.Report(progressChannel, "DONE", "엑셀 내보내기가 취소되었습니다.", written, totalCount, 100.0R, True)
+                Global.KKY_Tool_Revit.UI.Hub.ExcelProgressReporter.Report(progressChannel, "DONE", "엑셀 내보내기가 취소되었습니다.", 0, totalCount, 100.0R, True)
                 Return String.Empty
             Catch ex As Exception
-                Global.KKY_Tool_Revit.UI.Hub.ExcelProgressReporter.Report(progressChannel, "ERROR", ex.Message, written, totalCount, Nothing, True)
+                Global.KKY_Tool_Revit.UI.Hub.ExcelProgressReporter.Report(progressChannel, "ERROR", ex.Message, 0, totalCount, Nothing, True)
                 Throw
             End Try
+        End Function
+
+        Private Shared Function BuildConnectorExportDataTable(headers As List(Of String),
+                                                              rows As List(Of Dictionary(Of String, Object)),
+                                                              uiUnit As String) As DataTable
+            Dim dt As New DataTable("Connector Diagnostics")
+            Dim safeHeaders As List(Of String) = If(headers, New List(Of String)())
+            For Each h In safeHeaders
+                Dim colName As String = If(h, "").Trim()
+                If String.IsNullOrWhiteSpace(colName) Then colName = "Column"
+                Dim uniqueName As String = colName
+                Dim suffix As Integer = 1
+                While dt.Columns.Contains(uniqueName)
+                    suffix += 1
+                    uniqueName = colName & "_" & suffix.ToString()
+                End While
+                dt.Columns.Add(uniqueName, GetType(String))
+            Next
+
+            Dim safeRows = If(rows, New List(Of Dictionary(Of String, Object))())
+            For Each row In safeRows
+                Dim dr = dt.NewRow()
+                For Each col As DataColumn In dt.Columns
+                    dr(col.ColumnName) = ReadConnectorExportCell(row, col.ColumnName, uiUnit)
+                Next
+                dt.Rows.Add(dr)
+            Next
+
+            Return dt
+        End Function
+
+        Private Shared Function ReadConnectorExportCell(row As Dictionary(Of String, Object),
+                                                        header As String,
+                                                        uiUnit As String) As String
+            If row Is Nothing Then Return String.Empty
+
+            If String.Equals(header, "Distance", StringComparison.OrdinalIgnoreCase) Then
+                Dim distRaw As String = SafeCellString(row, header)
+                If String.IsNullOrWhiteSpace(distRaw) Then Return String.Empty
+                Dim distValue As Double
+                If Double.TryParse(distRaw, Globalization.NumberStyles.Any, Globalization.CultureInfo.InvariantCulture, distValue) OrElse
+                   Double.TryParse(distRaw, distValue) Then
+                    Return ConvertDistanceForUi(distValue, uiUnit)
+                End If
+                Return distRaw
+            End If
+
+            Return SafeCellString(row, header)
+        End Function
+
+        Private Shared Function ConvertDistanceForUi(distanceInch As Double, uiUnit As String) As String
+            Dim v As Double = distanceInch
+            If String.Equals(uiUnit, "mm", StringComparison.OrdinalIgnoreCase) Then
+                v = distanceInch * 25.4R
+            End If
+            Return Math.Round(v, 3).ToString(Globalization.CultureInfo.InvariantCulture)
         End Function
 
         ' 테두리/헤더/색상 스타일 헬퍼 (같은 워크북 내 공유)
