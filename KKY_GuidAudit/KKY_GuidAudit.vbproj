@@ -130,9 +130,4 @@
 		<WriteLinesToFile File="$(AddinFile)" Lines="@(AddinXml)" Overwrite="true" />
 		<Message Text="Created: $(AddinFile)" Importance="high" />
 	</Target>
-
-
-	<Target Name="CheckForDuplicateItems" Condition="'$(EnableDefaultItems)' == 'false'">
-		<!-- intentionally empty -->
-	</Target>
 </Project>

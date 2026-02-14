@@ -209,9 +209,4 @@
 				 Targets="Build"
 				 Properties="RevitYear=$(OtherYear2);Configuration=$(Configuration);Platform=$(Platform);BuildTwinRun=true;SkipTwin=true" />
 	</Target>
-
-
-	<Target Name="CheckForDuplicateItems" Condition="'$(EnableDefaultItems)' == 'false'">
-		<!-- intentionally empty -->
-	</Target>
 </Project>

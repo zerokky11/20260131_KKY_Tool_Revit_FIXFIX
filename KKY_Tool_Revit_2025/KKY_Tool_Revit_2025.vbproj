@@ -249,9 +249,4 @@
 		<WriteLinesToFile File="$(AddinFile)" Lines="@(AddinXml)" Overwrite="true" Encoding="UTF-8" />
 		<Message Text="Created: $(AddinFile) -> $(BuiltDll)" Importance="high" />
 	</Target>
-
-
-	<!-- SDK 10 호환: 일부 환경에서 WindowsDesktop targets가 CheckForDuplicateItems를 호출하지만 타깃이 누락될 수 있어 안전용 no-op 정의 -->
-	<Target Name="CheckForDuplicateItems" />
-
 </Project>
