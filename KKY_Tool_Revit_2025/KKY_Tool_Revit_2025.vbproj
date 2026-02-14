@@ -1,8 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<ImportDirectoryBuildProps>false</ImportDirectoryBuildProps>
-		<ImportDirectoryBuildTargets>false</ImportDirectoryBuildTargets>
 		<TargetFramework>net8.0-windows</TargetFramework>
 		<UseWPF>true</UseWPF>
 		<UseWindowsForms>true</UseWindowsForms>
@@ -253,7 +251,8 @@
 		<Message Text="Created: $(AddinFile) -> $(BuiltDll)" Importance="high" />
 	</Target>
 
-	<Target Name="CheckForDuplicateItems" Condition="'$(EnableDefaultItems)' == 'false'">
-		<!-- intentionally empty -->
-	</Target>
+
+	<!-- SDK 10 호환: 일부 환경에서 WindowsDesktop targets가 CheckForDuplicateItems를 호출하지만 타깃이 누락될 수 있어 안전용 no-op 정의 -->
+	<Target Name="CheckForDuplicateItems" />
+
 </Project>
