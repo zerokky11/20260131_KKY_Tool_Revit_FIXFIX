@@ -1,0 +1,6 @@
+<Project>
+  <Target Name="CheckForDuplicateItems"
+          Condition="'$(MSBuildProjectName)' == 'KKY_Tool_Revit_2025' and '$(EnableDefaultItems)' == 'false'">
+    <!-- intentionally empty: compatibility shim only -->
+  </Target>
+</Project>

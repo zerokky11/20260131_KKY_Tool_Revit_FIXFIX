@@ -22,7 +22,6 @@
 		<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
 
 		<!-- 기본 포함 제거 (링크 Compile을 수동 관리) -->
-		<EnableDefaultItems>false</EnableDefaultItems>
 		<EnableDefaultCompileItems>false</EnableDefaultCompileItems>
 
 		<Platforms>AnyCPU;x64</Platforms>
