@@ -1,6 +1,8 @@
-<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop" ToolsVersion="Current">
+﻿<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop" ToolsVersion="Current">
 
 	<PropertyGroup>
+		<ImportDirectoryBuildProps>false</ImportDirectoryBuildProps>
+		<ImportDirectoryBuildTargets>false</ImportDirectoryBuildTargets>
 		<TargetFramework>net48</TargetFramework>
 		<OutputType>Library</OutputType>
 
@@ -145,5 +147,4 @@
 		<WriteLinesToFile File="$(AddinFile)" Lines="@(AddinXml)" Overwrite="true" />
 		<Message Text="Created: $(AddinFile)" Importance="high" />
 	</Target>
-
 </Project>

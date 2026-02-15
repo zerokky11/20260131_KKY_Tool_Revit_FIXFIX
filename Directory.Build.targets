@@ -1,4 +1,0 @@
-<Project>
-  <!-- SDK 10 compatibility shim: some environments invoke this target even when default item targets are not imported. -->
-  <Target Name="CheckForDuplicateItems" />
-</Project>

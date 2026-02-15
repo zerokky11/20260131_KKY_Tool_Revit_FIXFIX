@@ -1,6 +1,8 @@
-<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
+﻿<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
 
 	<PropertyGroup>
+		<ImportDirectoryBuildProps>false</ImportDirectoryBuildProps>
+		<ImportDirectoryBuildTargets>false</ImportDirectoryBuildTargets>
 		<!-- Target -->
 		<TargetFramework>net48</TargetFramework>
 		<UseWindowsForms>true</UseWindowsForms>
@@ -207,5 +209,4 @@
 				 Targets="Build"
 				 Properties="RevitYear=$(OtherYear2);Configuration=$(Configuration);Platform=$(Platform);BuildTwinRun=true;SkipTwin=true" />
 	</Target>
-
 </Project>
